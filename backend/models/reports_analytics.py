@@ -39,13 +39,23 @@ import pandas as pd
 # --------------------------------------------------------------------------- #
 _CACHE = {}
 
-_EXEC_JSON = os.path.join(os.path.dirname(__file__), "..", "..",
-                          "src", "data", "execIntelligenceData.json")
+# Executive is precomputed (it has no backend model). Prefer a backend-local copy
+# so the deployed backend is self-contained (the frontend src/ folder is NOT part
+# of the backend deploy on Render/Railway); fall back to the frontend source when
+# running locally from the repo.
+_EXEC_CANDIDATES = [
+    os.path.join(os.path.dirname(__file__), "..", "data", "executive", "execIntelligenceData.json"),
+    os.path.join(os.path.dirname(__file__), "..", "..", "src", "data", "execIntelligenceData.json"),
+]
 
 
 def _load_executive():
-    with open(_EXEC_JSON, "r", encoding="utf-8") as f:
-        return json.load(f)
+    for path in _EXEC_CANDIDATES:
+        if os.path.exists(path):
+            with open(path, "r", encoding="utf-8") as f:
+                return json.load(f)
+    raise FileNotFoundError(
+        "execIntelligenceData.json not found in: " + " | ".join(os.path.normpath(p) for p in _EXEC_CANDIDATES))
 
 
 def load_modules(demand=None, inventory=None, dispatch=None, fleet=None):

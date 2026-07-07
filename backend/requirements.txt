@@ -1,0 +1,12 @@
+fastapi
+uvicorn
+pandas
+numpy
+prophet
+python-multipart
+faker
+scikit-learn
+ortools
+xgboost
+reportlab
+openpyxl

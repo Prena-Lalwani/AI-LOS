@@ -1,0 +1,11 @@
+node_modules
+dist
+dist-ssr
+*.local
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+
+# Raw source datasets — large (100MB+) and only consumed by one-off build
+# scripts, not needed at runtime (runtime data lives in backend/data/).
+Datasets/

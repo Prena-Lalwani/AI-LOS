@@ -1,0 +1,26 @@
+driver_id,name,home_warehouse_id,max_hours_per_shift,hourly_cost,license_type
+DRV-001,Allison Hill,WH1,10,34.74,CDL-B
+DRV-002,Noah Rhodes,WH1,10,33.71,CDL-A
+DRV-003,Angie Henderson,WH1,8,31.55,CDL-A
+DRV-004,Daniel Wagner,WH1,9,24.5,CDL-A
+DRV-005,Cristian Santos,WH1,10,29.35,CDL-B
+DRV-006,Connie Lawrence,WH1,8,31.62,CDL-B
+DRV-007,Abigail Shaffer,WH1,10,22.33,CDL-B
+DRV-008,Gina Moore,WH1,9,33.55,CDL-A
+DRV-009,Gabrielle Davis,WH1,9,25.4,CDL-A
+DRV-010,Ryan Munoz,WH2,8,31.88,CDL-A
+DRV-011,Monica Herrera,WH2,9,30.4,CDL-A
+DRV-012,Jamie Arnold,WH2,8,26.66,CDL-A
+DRV-013,Lisa Hensley,WH2,10,28.4,CDL-A
+DRV-014,Michele Williams,WH2,10,29.3,CDL-A
+DRV-015,Dylan Miller,WH2,10,31.89,CDL-B
+DRV-016,Brian Ramirez,WH2,10,37.73,CDL-A
+DRV-017,Holly Wood,WH2,8,22.74,CDL-A
+DRV-018,Derek Zuniga,WH3,10,32.88,CDL-A
+DRV-019,Lisa Jackson,WH3,8,23.04,CDL-B
+DRV-020,Carla Gray,WH3,8,37.45,CDL-A
+DRV-021,Margaret Hawkins DDS,WH3,9,28.17,CDL-B
+DRV-022,Patty Perez,WH3,9,23.56,CDL-B
+DRV-023,Ethan Adams,WH3,10,32.93,CDL-A
+DRV-024,Tommy Walter,WH3,8,35.33,CDL-A
+DRV-025,Matthew Foster,WH3,10,36.55,CDL-C

@@ -1,0 +1,4 @@
+warehouse_id,name,region,latitude,longitude,total_capacity_units
+WH1,Chicago Central DC,Midwest,41.8781,-87.6298,520000
+WH2,Dallas South Hub,South,32.7767,-96.797,460000
+WH3,Los Angeles West DC,West,34.0522,-118.2437,610000

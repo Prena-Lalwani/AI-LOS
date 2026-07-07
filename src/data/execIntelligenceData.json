@@ -1,0 +1,370 @@
+{
+  "kpis": [
+    {
+      "label": "Total Revenue",
+      "value": 36784735.01,
+      "delta": -34.2,
+      "unit": "$"
+    },
+    {
+      "label": "Total Profit",
+      "value": 3966902.97,
+      "delta": -48.6,
+      "unit": "$"
+    },
+    {
+      "label": "On-Time Delivery",
+      "value": 45.2,
+      "delta": -1.1,
+      "unit": "%"
+    },
+    {
+      "label": "Total Orders",
+      "value": 65752,
+      "delta": 0,
+      "unit": ""
+    }
+  ],
+  "trend": [
+    {
+      "month": "2023-07",
+      "revenue": 1051590.08,
+      "profit": 111660.74
+    },
+    {
+      "month": "2023-08",
+      "revenue": 927009.9,
+      "profit": 99140.66
+    },
+    {
+      "month": "2023-09",
+      "revenue": 1051253.69,
+      "profit": 113778.21
+    },
+    {
+      "month": "2023-10",
+      "revenue": 1014463.28,
+      "profit": 108083.68
+    },
+    {
+      "month": "2023-11",
+      "revenue": 1050478.44,
+      "profit": 112147.9
+    },
+    {
+      "month": "2023-12",
+      "revenue": 1024006.17,
+      "profit": 110147.16
+    },
+    {
+      "month": "2024-01",
+      "revenue": 1038081.19,
+      "profit": 115624.06
+    },
+    {
+      "month": "2024-02",
+      "revenue": 1029494.69,
+      "profit": 117979.77
+    },
+    {
+      "month": "2024-03",
+      "revenue": 1018338.6,
+      "profit": 113467.94
+    },
+    {
+      "month": "2024-04",
+      "revenue": 1049154.27,
+      "profit": 101757.87
+    },
+    {
+      "month": "2024-05",
+      "revenue": 1029120.24,
+      "profit": 104427.36
+    },
+    {
+      "month": "2024-06",
+      "revenue": 1057840.88,
+      "profit": 110641.55
+    },
+    {
+      "month": "2024-07",
+      "revenue": 1046308.25,
+      "profit": 106780.95
+    },
+    {
+      "month": "2024-08",
+      "revenue": 968542.85,
+      "profit": 86809.49
+    },
+    {
+      "month": "2024-09",
+      "revenue": 1025853.12,
+      "profit": 101259.99
+    },
+    {
+      "month": "2024-10",
+      "revenue": 1001211.58,
+      "profit": 114976.62
+    },
+    {
+      "month": "2024-11",
+      "revenue": 1029400.2,
+      "profit": 110716.12
+    },
+    {
+      "month": "2024-12",
+      "revenue": 1003059.55,
+      "profit": 104196.07
+    },
+    {
+      "month": "2025-01",
+      "revenue": 1045715.62,
+      "profit": 119941.72
+    },
+    {
+      "month": "2025-02",
+      "revenue": 1048200.25,
+      "profit": 110729.54
+    },
+    {
+      "month": "2025-03",
+      "revenue": 1002397.04,
+      "profit": 123384.71
+    },
+    {
+      "month": "2025-04",
+      "revenue": 1048130.55,
+      "profit": 116781.97
+    },
+    {
+      "month": "2025-05",
+      "revenue": 1047590.14,
+      "profit": 109539.2
+    },
+    {
+      "month": "2025-06",
+      "revenue": 1037408.17,
+      "profit": 105002.69
+    },
+    {
+      "month": "2025-07",
+      "revenue": 1029698.02,
+      "profit": 114843.85
+    },
+    {
+      "month": "2025-08",
+      "revenue": 992534.9,
+      "profit": 115111.07
+    },
+    {
+      "month": "2025-09",
+      "revenue": 1048004.78,
+      "profit": 118688.9
+    },
+    {
+      "month": "2025-10",
+      "revenue": 1038321.62,
+      "profit": 115961.06
+    },
+    {
+      "month": "2025-11",
+      "revenue": 1105485.32,
+      "profit": 115014.64
+    },
+    {
+      "month": "2025-12",
+      "revenue": 1032086.49,
+      "profit": 110399.29
+    },
+    {
+      "month": "2026-01",
+      "revenue": 1104373.36,
+      "profit": 113026.7
+    },
+    {
+      "month": "2026-02",
+      "revenue": 1109337.17,
+      "profit": 131501.16
+    },
+    {
+      "month": "2026-03",
+      "revenue": 1143775.11,
+      "profit": 122462.39
+    },
+    {
+      "month": "2026-04",
+      "revenue": 1073994.17,
+      "profit": 113447.17
+    },
+    {
+      "month": "2026-05",
+      "revenue": 626914.38,
+      "profit": 67791.25
+    },
+    {
+      "month": "2026-06",
+      "revenue": 503910.82,
+      "profit": 65837.63
+    },
+    {
+      "month": "2026-07",
+      "revenue": 331650.12,
+      "profit": 33841.89
+    }
+  ],
+  "regions": [
+    {
+      "region": "Western Europe",
+      "sales": 5894380.77,
+      "profit": 625446.08,
+      "onTimePct": 44.2
+    },
+    {
+      "region": "Central America",
+      "sales": 5665712.1,
+      "profit": 616341.57,
+      "onTimePct": 45.2
+    },
+    {
+      "region": "South America",
+      "sales": 2960881.41,
+      "profit": 335154.4,
+      "onTimePct": 45.7
+    },
+    {
+      "region": "Northern Europe",
+      "sales": 2155830.65,
+      "profit": 233450.6,
+      "onTimePct": 46
+    },
+    {
+      "region": "Southern Europe",
+      "sales": 2047918.82,
+      "profit": 230829.23,
+      "onTimePct": 45.6
+    },
+    {
+      "region": "Oceania",
+      "sales": 2016654.2,
+      "profit": 201478.02,
+      "onTimePct": 46
+    },
+    {
+      "region": "Southeast Asia",
+      "sales": 1932495.57,
+      "profit": 211342.82,
+      "onTimePct": 44.5
+    },
+    {
+      "region": "Caribbean",
+      "sales": 1651019.33,
+      "profit": 171825.64,
+      "onTimePct": 46.9
+    },
+    {
+      "region": "West of USA",
+      "sales": 1571415.96,
+      "profit": 164940.66,
+      "onTimePct": 46
+    },
+    {
+      "region": "South Asia",
+      "sales": 1553680.92,
+      "profit": 165703.9,
+      "onTimePct": 43.7
+    },
+    {
+      "region": "Eastern Asia",
+      "sales": 1486401.34,
+      "profit": 147368.01,
+      "onTimePct": 45.7
+    },
+    {
+      "region": "East of USA",
+      "sales": 1371111.99,
+      "profit": 156263.3,
+      "onTimePct": 44.3
+    },
+    {
+      "region": "West Asia",
+      "sales": 1174671.78,
+      "profit": 118815.41,
+      "onTimePct": 44.7
+    },
+    {
+      "region": "US Center",
+      "sales": 1151355.77,
+      "profit": 131094.23,
+      "onTimePct": 44.8
+    },
+    {
+      "region": "South of  USA",
+      "sales": 785783.95,
+      "profit": 88114.88,
+      "onTimePct": 44.2
+    },
+    {
+      "region": "Eastern Europe",
+      "sales": 774266.57,
+      "profit": 79717.05,
+      "onTimePct": 44.3
+    },
+    {
+      "region": "West Africa",
+      "sales": 727951.19,
+      "profit": 80030.27,
+      "onTimePct": 47.2
+    },
+    {
+      "region": "North Africa",
+      "sales": 634752.22,
+      "profit": 64599.86,
+      "onTimePct": 45.5
+    },
+    {
+      "region": "East Africa",
+      "sales": 376234.9,
+      "profit": 43167.73,
+      "onTimePct": 44.1
+    },
+    {
+      "region": "Central Africa",
+      "sales": 327263.02,
+      "profit": 33447.27,
+      "onTimePct": 42
+    },
+    {
+      "region": "Southern Africa",
+      "sales": 228251.59,
+      "profit": 30826.05,
+      "onTimePct": 46.7
+    },
+    {
+      "region": "Canada",
+      "sales": 186861.04,
+      "profit": 23900.71,
+      "onTimePct": 51.2
+    },
+    {
+      "region": "Central Asia",
+      "sales": 109839.93,
+      "profit": 13045.28,
+      "onTimePct": 44.7
+    }
+  ],
+  "healthScore": 50,
+  "alerts": [
+    {
+      "id": "alert-1",
+      "severity": "teal",
+      "message": "Canada on-time delivery is 6% above average",
+      "timestamp": "2026-07-06T11:44:29"
+    },
+    {
+      "id": "alert-2",
+      "severity": "teal",
+      "message": "West Africa on-time delivery is 2% above average",
+      "timestamp": "2026-07-06T11:01:29"
+    }
+  ]
+}

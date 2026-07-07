@@ -1,0 +1,17 @@
+# Render blueprint for the AI-LOS FastAPI backend.
+# In Render: New > Blueprint > point at this repo. Set ALLOWED_ORIGINS to your
+# Vercel URL after the frontend is deployed.
+services:
+  - type: web
+    name: ai-los-api
+    runtime: python
+    rootDir: backend
+    plan: starter                 # 512MB free tier can OOM while training; starter+ recommended
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+      - key: ALLOWED_ORIGINS      # e.g. https://ai-los.vercel.app  (set in dashboard)
+        sync: false

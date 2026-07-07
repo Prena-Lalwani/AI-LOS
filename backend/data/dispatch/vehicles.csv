@@ -1,0 +1,16 @@
+vehicle_id,warehouse_id,capacity_units,fuel_efficiency_km_per_liter,avg_speed_kmph,status
+TRK-001,WH1,743,14.9,58,maintenance
+TRK-002,WH1,1369,12.0,69,active
+TRK-003,WH1,1914,9.0,62,active
+TRK-004,WH1,912,13.8,72,active
+TRK-005,WH1,1466,12.2,67,active
+TRK-006,WH2,1740,8.6,67,active
+TRK-007,WH2,764,13.0,63,maintenance
+TRK-008,WH2,1443,11.3,62,active
+TRK-009,WH2,1762,9.6,71,active
+TRK-010,WH2,862,14.6,59,active
+TRK-011,WH3,1330,11.8,61,active
+TRK-012,WH3,1900,9.2,56,active
+TRK-013,WH3,732,13.1,59,active
+TRK-014,WH3,1198,11.7,57,active
+TRK-015,WH3,1926,8.2,68,active

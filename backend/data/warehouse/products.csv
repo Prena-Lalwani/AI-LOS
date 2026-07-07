@@ -1,0 +1,21 @@
+product_id,name,category,unit_weight_kg,unit_volume_m3
+P001,Canned Soup 24pk,Groceries,1.6,0.0146
+P002,Bottled Water 12pk,Groceries,10.26,0.0449
+P003,Rice Sack 10kg,Groceries,9.92,0.0844
+P004,Coffee Beans 1kg,Groceries,2.12,0.0321
+P005,"4K Smart TV 55""",Electronics,11.4,0.2057
+P006,Wireless Earbuds,Electronics,13.28,0.2238
+P007,"Laptop 14""",Electronics,5.22,0.0357
+P008,Bluetooth Speaker,Electronics,13.56,0.2293
+P009,Building Block Set,Toys,3.96,0.042
+P010,RC Race Car,Toys,1.68,0.0276
+P011,Plush Bear XL,Toys,1.56,0.0295
+P012,Board Game Deluxe,Toys,3.48,0.0378
+P013,Office Chair Ergo,Furniture,35.78,0.5751
+P014,Bookshelf 5-Tier,Furniture,11.82,0.218
+P015,Coffee Table Oak,Furniture,26.69,0.4597
+P016,Bed Frame Queen,Furniture,19.84,0.3636
+P017,Winter Jacket,Clothing,0.74,0.0031
+P018,Denim Jeans,Clothing,1.47,0.008
+P019,Cotton T-Shirt 5pk,Clothing,0.65,0.0125
+P020,Running Shoes,Clothing,1.53,0.0202

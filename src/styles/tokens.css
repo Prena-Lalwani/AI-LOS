@@ -1,0 +1,57 @@
+/* ===========================================================================
+   AI-LOS design tokens
+   The whole app is reskinnable by editing this one file.
+   Color rule: --accent-flow (teal) = flowing / normal / on-time.
+               --accent-attention (amber) = needs attention.
+               --critical (red) = blocking / critical only (used sparingly).
+   =========================================================================== */
+
+:root[data-theme='light'] {
+  --bg-page: #f5f7f8;
+  --bg-panel: #ffffff;
+  --border: #dce1e5;
+  --text-primary: #1b242c;
+  --text-secondary: #66727c;
+  --accent-flow: #0f8f79; /* teal — normal / live / on-track */
+  --accent-attention: #b57518; /* amber — needs attention / alerts */
+  --accent-flow-bg: #e3f3ef;
+  --accent-attention-bg: #fbeedd;
+  --critical: #c1362b; /* red — critical / blocking only */
+  --critical-bg: #fbe7e5;
+  --on-accent: #ffffff;
+  --hover: rgba(102, 114, 124, 0.08);
+}
+
+:root[data-theme='dark'] {
+  --bg-page: #12171c;
+  --bg-panel: #1b222a;
+  --border: #2b333b;
+  --text-primary: #e7ecf0;
+  --text-secondary: #8996a3;
+  --accent-flow: #2fd1b8;
+  --accent-attention: #ffae42;
+  --accent-flow-bg: #1a2e2a;
+  --accent-attention-bg: #2e2418;
+  --critical: #f0645a;
+  --critical-bg: #2e1a18;
+  --on-accent: #0c1116;
+  --hover: rgba(137, 150, 163, 0.12);
+}
+
+:root {
+  /* Type families */
+  --font-display: 'Barlow Condensed', system-ui, sans-serif; /* headers, KPI numbers, signage */
+  --font-body: 'IBM Plex Sans', system-ui, sans-serif; /* labels, body, UI */
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace; /* IDs, timestamps, dense values */
+
+  /* Spacing ramp */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+
+  --radius: 8px;
+  --ease: cubic-bezier(0.21, 0.32, 0.27, 0.98);
+}

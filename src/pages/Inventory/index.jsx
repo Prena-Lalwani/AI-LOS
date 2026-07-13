@@ -55,6 +55,12 @@ function AllClear({ children }) {
 export default function Inventory() {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
+  // interactive picking route: chosen warehouse, selected product ids, and the
+  // optimized result (null = show the default example from the dashboard).
+  const [pickWh, setPickWh] = useState(null);
+  const [pickSel, setPickSel] = useState([]);
+  const [customRoute, setCustomRoute] = useState(null);
+  const [pickBusy, setPickBusy] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -101,9 +107,40 @@ export default function Inventory() {
   }
 
   const { reorderRecommendations, safetyStock, stockOutPredictions, overstock,
-    warehouseHeatmap, congestionAlerts, pickingRouteExample } = data;
-  const primary = warehouseHeatmap.warehouses.find((w) => w.warehouseId === warehouseHeatmap.primary)
+    warehouseHeatmap, congestionAlerts, pickingRouteExample, pickingCatalog } = data;
+
+  // --- ONE warehouse drives the heatmap AND the picking route ------------
+  const catalog = pickingCatalog || { warehouses: [], products: [] };
+  const wh = pickWh || warehouseHeatmap.primary;         // selected warehouse id
+  const heatWarehouse = warehouseHeatmap.warehouses.find((w) => w.warehouseId === wh)
     || warehouseHeatmap.warehouses[0];
+  const whProducts = catalog.products.filter((p) => p.warehouseId === wh);
+  // route to show: fetched result, or the startup example if it's the same wh
+  const route = customRoute
+    || (pickingRouteExample.warehouseId === wh ? pickingRouteExample : null);
+
+  // product ↔ shelf relation: which products sit in each zone-aisle cell, and
+  // which cells hold the items currently ticked for picking.
+  const aKey = (code) => { const [, z, a] = code.split('-'); return `${+z.slice(1)}-${+a.slice(1)}`; };
+  const cellProducts = {};
+  whProducts.forEach((p) => { (cellProducts[aKey(p.locationCode)] ||= []).push(p.name); });
+  const pickedCells = new Set(
+    whProducts.filter((p) => pickSel.includes(p.productId)).map((p) => aKey(p.locationCode)));
+
+  const loadRoute = (whId, products) => {
+    setPickBusy(true);
+    const qs = new URLSearchParams({ warehouse: whId });
+    if (products && products.length) qs.set('products', products.join(','));
+    fetch(`${API_BASE}/api/inventory/picking-route?${qs.toString()}`)
+      .then((r) => r.json())
+      .then((d) => setCustomRoute(d))
+      .catch(() => {})
+      .finally(() => setPickBusy(false));
+  };
+  const changeWh = (whId) => { setPickWh(whId); setPickSel([]); setCustomRoute(null); loadRoute(whId, []); };
+  const togglePick = (pid) => setPickSel((s) => (
+    s.includes(pid) ? s.filter((x) => x !== pid) : [...s, pid]));
+  const optimizeRoute = () => loadRoute(wh, pickSel);
 
   // Reorder table -> DataTable rows/columns
   const reorderRows = reorderRecommendations.rows.map((r) => ({ ...r, id: `${r.productId}-${r.locationCode}` }));
@@ -142,46 +179,100 @@ export default function Inventory() {
 
           <div className="card">
             <div className="card__head" style={{ justifyContent: 'space-between' }}>
-              <h2>Warehouse Heatmap · {primary.name}</h2>
-              <div className="legend">
-                <span className="legend__item"><span className="legend__swatch" style={{ background: 'var(--accent-flow-bg)' }} />Idle</span>
-                <span className="legend__item"><span className="legend__swatch" style={{ background: 'var(--accent-flow)' }} />Normal</span>
-                <span className="legend__item"><span className="legend__swatch" style={{ background: 'var(--accent-attention-bg)' }} />Busy</span>
-                <span className="legend__item"><span className="legend__swatch" style={{ background: 'var(--accent-attention)' }} />Congested</span>
-              </div>
+              <h2>Warehouse Heatmap · {heatWarehouse.name}</h2>
+              <select className="date-input" value={wh} onChange={(e) => changeWh(e.target.value)}>
+                {catalog.warehouses.map((w) => (
+                  <option key={w.warehouseId} value={w.warehouseId}>{w.warehouseId} · {w.name}</option>
+                ))}
+              </select>
             </div>
-            <div className="heatmap" style={{ gridTemplateColumns: `repeat(${primary.aisles}, 1fr)` }}>
-              {primary.cells.map((c) => (
-                <div key={`${c.zone}-${c.aisle}`} className={`heat-cell ${heatBucket(c.utilization)}`}
-                  style={{ flexDirection: 'column', gap: 1, lineHeight: 1 }}
-                  title={`${String.fromCharCode(64 + c.zone)}${c.aisle} · Zone ${c.zone} · Aisle ${c.aisle} — avg inv ${c.avgInventory}, ${c.pickCount} picks`}>
-                  <span style={{ fontWeight: 600 }}>{`${String.fromCharCode(64 + c.zone)}${c.aisle}`}</span>
-                  <span style={{ opacity: 0.7, fontSize: 9 }}>{c.utilization}</span>
-                </div>
-              ))}
+            <div className="legend" style={{ marginBottom: 10 }}>
+              <span className="legend__item"><span className="legend__swatch" style={{ background: 'var(--accent-flow-bg)' }} />Idle</span>
+              <span className="legend__item"><span className="legend__swatch" style={{ background: 'var(--accent-flow)' }} />Normal</span>
+              <span className="legend__item"><span className="legend__swatch" style={{ background: 'var(--accent-attention-bg)' }} />Busy</span>
+              <span className="legend__item"><span className="legend__swatch" style={{ background: 'var(--accent-attention)' }} />Congested</span>
+              <span className="legend__item"><span className="legend__swatch" style={{ background: 'transparent', boxShadow: 'inset 0 0 0 2px var(--accent-flow)' }} />Pick item</span>
             </div>
-            <div className="muted" style={{ fontSize: 12, marginTop: 10 }}>
-              Occupancy (avg inventory) blended with pick activity across {primary.zones} zones × {primary.aisles} aisles.
-              Each cell is labelled Zone letter + Aisle number (e.g. B3) with its utilization below.
+            <div className="heatmap" style={{ gridTemplateColumns: `repeat(${heatWarehouse.aisles}, 1fr)` }}>
+              {heatWarehouse.cells.map((c) => {
+                const cellKey = `${c.zone}-${c.aisle}`;
+                const items = cellProducts[cellKey] || [];
+                const picked = pickedCells.has(cellKey);
+                const label = `${String.fromCharCode(64 + c.zone)}${c.aisle}`;
+                return (
+                  <div
+                    key={cellKey}
+                    className={`heat-cell ${heatBucket(c.utilization)}`}
+                    style={{ flexDirection: 'column', gap: 1, lineHeight: 1,
+                      boxShadow: picked ? 'inset 0 0 0 2px var(--accent-flow)' : undefined }}
+                    title={`${label} · Zone ${c.zone} Aisle ${c.aisle} — util ${c.utilization}, ${c.pickCount} picks`
+                      + (items.length ? `\nItems here: ${items.join(', ')}` : '\nNo catalogued items')}
+                  >
+                    <span style={{ fontWeight: 600 }}>{label}</span>
+                    <span style={{ opacity: 0.72, fontSize: 9 }}>{items.length ? `${items.length} item${items.length > 1 ? 's' : ''}` : c.utilization}</span>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="muted" style={{ fontSize: 12, marginTop: 10, lineHeight: 1.5 }}>
+              {heatWarehouse.zones} zones × {heatWarehouse.aisles} aisles · colour = occupancy + pick activity, cell shows
+              how many catalogued items sit there. Hover for the item list; ticked pick items below get a teal ring.
             </div>
           </div>
 
           <div className="card">
-            <div className="card__head">              <h2>Picking Route Optimization · {pickingRouteExample.warehouseId}</h2>
+            <div className="card__head">
+              <h2>Picking Route Optimization · {wh}</h2>
             </div>
-            <div className="kpi-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)', marginBottom: 12 }}>
-              <KpiCard label="Distance Saved" value={`${pickingRouteExample.distanceSavedPct}%`} state="flow" />
-              <KpiCard label="Time Saved" value={`${pickingRouteExample.timeSavedPct}%`} state="flow" />
-              <KpiCard label="Stops" value={String(pickingRouteExample.stops)} state="neutral" />
+            <p className="muted" style={{ margin: '0 0 8px', fontSize: 12 }}>
+              Tick the items to collect — they light up on the map above — then optimize the picker&rsquo;s
+              walking route (OR-Tools TSP).
+            </p>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, maxHeight: 104, overflowY: 'auto', marginBottom: 10 }}>
+              {whProducts.map((p) => (
+                <button
+                  key={p.productId}
+                  className={`chip${pickSel.includes(p.productId) ? ' active' : ''}`}
+                  onClick={() => togglePick(p.productId)}
+                  title={friendlyLocation(p.locationCode)}
+                >
+                  {p.name}
+                </button>
+              ))}
             </div>
-            <div className="muted" style={{ fontSize: 12, lineHeight: 1.6 }}>
-              <div><strong>OR-Tools TSP:</strong> <span className="mono">{pickingRouteExample.optimizedSequence.map(friendlyLocation).join(' → ')}</span></div>
-              <div style={{ marginTop: 4 }}><strong>Naive picklist:</strong> <span className="mono">{pickingRouteExample.naiveSequence.map(friendlyLocation).join(' → ')}</span></div>
-              <div style={{ marginTop: 6 }}>
-                {pickingRouteExample.optimizedDistance} vs {pickingRouteExample.naiveDistance} distance units ·
-                {' '}{pickingRouteExample.optimizedDurationSec}s vs {pickingRouteExample.naiveDurationSec}s
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+              <button className="btn btn--sm" disabled={pickBusy || pickSel.length < 2} onClick={optimizeRoute}>
+                {pickBusy ? 'Optimizing…' : `Optimize Route${pickSel.length ? ` (${pickSel.length})` : ''}`}
+              </button>
+              {pickSel.length > 0 && (
+                <button className="btn btn--sm" onClick={() => { setPickSel([]); loadRoute(wh, []); }}>Reset</button>
+              )}
+              <span className="muted" style={{ fontSize: 11 }}>
+                {pickSel.length < 2 ? 'select at least 2 items' : (customRoute && pickSel.length ? 'your picklist' : 'example route')}
+              </span>
+            </div>
+
+            {route ? (
+              <>
+                <div className="kpi-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)', margin: '12px 0' }}>
+                  <KpiCard label="Distance Saved" value={`${route.distanceSavedPct}%`} state="flow" />
+                  <KpiCard label="Time Saved" value={`${route.timeSavedPct}%`} state="flow" />
+                  <KpiCard label="Stops" value={String(route.stops)} state="neutral" />
+                </div>
+                <div className="muted" style={{ fontSize: 12, lineHeight: 1.6 }}>
+                  <div><strong>OR-Tools TSP:</strong> <span className="mono">{route.optimizedSequence.map(friendlyLocation).join(' → ')}</span></div>
+                  <div style={{ marginTop: 4 }}><strong>Naive picklist:</strong> <span className="mono">{route.naiveSequence.map(friendlyLocation).join(' → ')}</span></div>
+                  <div style={{ marginTop: 6 }}>
+                    {route.optimizedDistance} vs {route.naiveDistance} distance units ·
+                    {' '}{route.optimizedDurationSec}s vs {route.naiveDurationSec}s
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="muted" style={{ fontSize: 13, padding: '16px 2px' }}>
+                {pickBusy ? 'Optimizing route…' : 'Select items and optimize to see the route.'}
               </div>
-            </div>
+            )}
           </div>
         </div>
 

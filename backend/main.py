@@ -21,7 +21,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 
 from models.demand_forecast import build_payload
-from models.inventory_intelligence import build_payload as build_inventory_payload
+from models.inventory_intelligence import (
+    build_payload as build_inventory_payload,
+    picking_route_for,
+)
 from models.dispatch_intelligence import build_plan as build_dispatch_plan
 from models.fleet_intelligence import (
     train_models as train_fleet_models,
@@ -95,6 +98,15 @@ def demand_forecast():
 def inventory_dashboard():
     """Full Inventory & Warehouse Intelligence payload (cached from startup)."""
     return _cache.get("inventory") or build_inventory_payload()
+
+
+@app.get("/api/inventory/picking-route")
+def inventory_picking_route(warehouse: Optional[str] = None,
+                            products: Optional[str] = None):
+    """Optimize a picker's walking route (OR-Tools TSP) for a user-selected set
+    of products in one warehouse. `products` = comma-separated product ids."""
+    pids = [p.strip() for p in products.split(",") if p.strip()] if products else None
+    return picking_route_for(warehouse, pids)
 
 
 @app.get("/api/dispatch/plan")

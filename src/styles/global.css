@@ -1,6 +1,6 @@
 /* ===========================================================================
-   AI-LOS global styles. Flat design: hairline borders + spacing, no shadows.
-   All colors reference tokens in tokens.css — no raw hex here.
+   AI-LOS global styles. Soft-depth design: 1px borders + subtle shadows +
+   generous spacing. All colors/shadows reference tokens in tokens.css.
    =========================================================================== */
 
 * { box-sizing: border-box; }
@@ -61,7 +61,7 @@ button { font-family: var(--font-body); }
    horizontally instead of squeezing the layout any further. */
 .app { display: flex; height: 100vh; width: 100%; min-width: 350px; overflow: hidden; }
 .shell { flex: 1; display: flex; flex-direction: column; min-width: 0; }
-.main { flex: 1; overflow: auto; padding: 22px 24px 28px; }
+.main { flex: 1; overflow: auto; padding: 24px 28px 32px; }
 
 /* sidebar ------------------------------------------------------------------*/
 .sidebar {
@@ -142,8 +142,8 @@ button { font-family: var(--font-body); }
 /* top bar / status ribbon --------------------------------------------------*/
 .topbar {
   height: 56px; flex-shrink: 0; background: var(--bg-panel);
-  border-bottom: 0.5px solid var(--border);
-  display: flex; align-items: center; gap: 22px; padding: 0 20px;
+  border-bottom: 1px solid var(--border); box-shadow: var(--shadow-sm);
+  display: flex; align-items: center; gap: 22px; padding: 0 20px; z-index: 5;
 }
 /* hamburger — hidden on desktop, revealed at the mobile drawer breakpoint */
 .topbar__menu {
@@ -214,11 +214,12 @@ button { font-family: var(--font-body); }
 /* buttons ------------------------------------------------------------------*/
 .btn {
   display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 16px;
-  border: 0.5px solid var(--border); border-radius: var(--radius);
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
   background: transparent; color: var(--text-primary);
   font-size: 13px; font-weight: 500; cursor: pointer;
-  white-space: nowrap; transition: background 0.15s var(--ease);
+  white-space: nowrap; transition: background 0.15s var(--ease), border-color 0.15s var(--ease);
 }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .btn:hover { background: var(--hover); }
 .btn--primary { border: none; background: var(--accent-flow); color: var(--on-accent); }
 .btn--primary:hover { filter: brightness(1.07); background: var(--accent-flow); }
@@ -226,8 +227,9 @@ button { font-family: var(--font-body); }
 
 /* cards --------------------------------------------------------------------*/
 .card {
-  background: var(--bg-panel); border: 0.5px solid var(--border);
-  border-radius: var(--radius); padding: 16px;
+  background: var(--bg-panel); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 18px;
+  box-shadow: var(--shadow-sm);
 }
 .card__head { display: flex; align-items: center; gap: 9px; margin-bottom: 12px; flex-wrap: wrap; }
 .card h2 {
@@ -241,18 +243,19 @@ button { font-family: var(--font-body); }
 }
 
 /* layout helpers -----------------------------------------------------------*/
-.kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(168px, 1fr)); gap: 14px; margin-bottom: 16px; }
-.split { display: grid; grid-template-columns: minmax(0, 2fr) minmax(268px, 1fr); gap: 16px; align-items: start; }
+.kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(168px, 1fr)); gap: 16px; margin-bottom: 18px; }
+.split { display: grid; grid-template-columns: minmax(0, 2fr) minmax(268px, 1fr); gap: 18px; align-items: start; }
 .split > * { min-width: 0; } /* prevent grid items (e.g. a bare table card) from blowing out the track */
 .split--copilot { grid-template-columns: minmax(0, 1fr) 280px; }
-.col { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.col { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
 
 /* kpi card -----------------------------------------------------------------*/
 .kpi-card {
   position: relative; overflow: hidden;
-  background: var(--bg-panel); border: 0.5px solid var(--border); border-radius: var(--radius);
-  padding: 14px 16px 14px 17px; display: flex; flex-direction: column; gap: 7px;
-  transition: border-color 0.15s var(--ease), box-shadow 0.15s var(--ease);
+  background: var(--bg-panel); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 15px 16px 15px 18px; display: flex; flex-direction: column; gap: 7px;
+  box-shadow: var(--shadow-sm);
+  transition: border-color 0.15s var(--ease), box-shadow 0.15s var(--ease), transform 0.15s var(--ease);
 }
 /* left severity accent bar — same colour language as the rest of the app */
 .kpi-card::before {
@@ -262,7 +265,7 @@ button { font-family: var(--font-body); }
 .kpi-card--flow::before { background: var(--accent-flow); }
 .kpi-card--attention::before { background: var(--accent-attention); }
 .kpi-card--critical::before { background: var(--critical); }
-.kpi-card:hover { border-color: var(--text-secondary); box-shadow: 0 1px 8px rgba(0, 0, 0, 0.06); }
+.kpi-card:hover { border-color: var(--border-strong); box-shadow: var(--shadow-md); transform: translateY(-2px); }
 .kpi-card__label { font-size: 12px; color: var(--text-secondary); font-weight: 500; }
 .kpi-card__value { font-family: var(--font-display); font-weight: 600; font-size: 28px; line-height: 0.95; }
 /* delta becomes a compact tinted pill */

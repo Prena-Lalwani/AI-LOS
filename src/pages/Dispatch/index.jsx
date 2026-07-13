@@ -18,6 +18,23 @@ const API_URL = `${API_BASE}/api/dispatch/plan`;
 const ROUTE_COLORS = ['#3987e5', '#199e70', '#c98500', '#008300', '#9085e9', '#e66767', '#d55181', '#d95926'];
 const routeColor = (i) => ROUTE_COLORS[i % ROUTE_COLORS.length];
 
+// Great-circle distance (km) between two [lat, lng] points — used to break the
+// selected route into per-leg distances for the itinerary panel.
+const havKm = (a, b) => {
+  const R = 6371;
+  const toR = (d) => (d * Math.PI) / 180;
+  const dLat = toR(b[0] - a[0]);
+  const dLng = toR(b[1] - a[1]);
+  const s = Math.sin(dLat / 2) ** 2
+    + Math.cos(toR(a[0])) * Math.cos(toR(b[0])) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.asin(Math.sqrt(s));
+};
+const hhmmToMin = (t) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+const minToHhmm = (m) => {
+  const x = Math.round(m);
+  return `${String(Math.floor(x / 60) % 24).padStart(2, '0')}:${String(x % 60).padStart(2, '0')}`;
+};
+
 // Route status label derived from the solver + ML flags.
 const statusOf = (r) => {
   if (r.overtimeRisk) return { label: 'OT risk', state: 'attention' };
@@ -87,6 +104,32 @@ export default function Dispatch() {
     [Math.max(...allPts.map((p) => p[0])), Math.max(...allPts.map((p) => p[1]))],
   ];
   const visibleRoutes = geo.routes.filter((r) => sel === null || r.route === sel);
+
+  // Itinerary for the selected truck: depot -> delivery stops (in the solver's
+  // optimized order) -> depot. Per-leg distances come from the real stop
+  // coordinates; arrival times are planned estimates using the same speed
+  // (fleetSpeedKmph) and per-stop service time the backend planned with.
+  const selInfo = (() => {
+    if (sel === null) return null;
+    const r = routes[sel];
+    const g = geo.routes.find((x) => x.route === sel);
+    if (!g) return null;
+    const speed = data.meta?.fleetSpeedKmph || 55;
+    const svc = data.meta?.serviceMinPerStop || 9;
+    const path = g.path;                       // [depot, s1, ..., depot]
+    let cum = 0;
+    let t = hhmmToMin(r.startTime);
+    const legs = [];
+    for (let k = 1; k < path.length; k += 1) {
+      const legKm = havKm(path[k - 1], path[k]);
+      cum += legKm;
+      t += (legKm / speed) * 60;
+      const isReturn = k === path.length - 1;
+      legs.push({ n: k, legKm, cumKm: cum, arrive: t, stop: isReturn ? null : g.stops[k - 1], isReturn });
+      if (!isReturn) t += svc;
+    }
+    return { r, legs, color: routeColor(sel) };
+  })();
 
   const rows = routes.map((r, i) => {
     const s = statusOf(r);
@@ -188,6 +231,58 @@ export default function Dispatch() {
                 : `${routes[sel].vehicleId} · ${routes[sel].driver} — ${routes[sel].numStops} stops, ${routes[sel].distanceKm} km, ${routes[sel].startTime}–${routes[sel].endTime}. Click again or “All routes” to reset.`}
             </div>
           </div>
+
+          {selInfo && (
+            <div className="card">
+              <div className="card__head" style={{ justifyContent: 'space-between' }}>
+                <h2><span style={{ color: selInfo.color }}>■ </span>{selInfo.r.vehicleId} · Itinerary</h2>
+                <button className="btn btn--sm" onClick={() => setSel(null)}>Show all</button>
+              </div>
+              <div className="muted" style={{ fontSize: 12, marginBottom: 10, lineHeight: 1.5 }}>
+                {selInfo.r.driver} · from {data.warehouseName} ({data.warehouseId}) · {selInfo.r.numStops} stops ·
+                {' '}{selInfo.r.distanceKm} km · {selInfo.r.startTime}–{selInfo.r.endTime} · load {selInfo.r.capacityUtilizationPct}%
+                {selInfo.r.needsFuelStop ? ` · refuel @ ${selInfo.r.nearestStation}` : ''}
+              </div>
+
+              <div style={{ maxHeight: 340, overflowY: 'auto', paddingRight: 4 }}>
+                {/* depot departure */}
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '7px 0' }}>
+                  <span style={{ width: 22, height: 22, borderRadius: 5, background: 'var(--accent-attention)', color: 'var(--on-accent)', fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>◆</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 12.5, fontWeight: 600 }}>{data.warehouseId} Depot</div>
+                    <div className="muted" style={{ fontSize: 11 }}>Departure</div>
+                  </div>
+                  <span className="mono muted" style={{ fontSize: 11.5, flexShrink: 0 }}>{selInfo.r.startTime}</span>
+                </div>
+
+                {selInfo.legs.map((leg) => (
+                  leg.isReturn ? (
+                    <div key="return" style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '7px 0', borderTop: '0.5px solid var(--border)' }}>
+                      <span style={{ width: 22, height: 22, borderRadius: 5, background: 'var(--accent-attention)', color: 'var(--on-accent)', fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>◆</span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 12.5, fontWeight: 600 }}>Return to {data.warehouseId}</div>
+                        <div className="muted" style={{ fontSize: 11 }}>+{leg.legKm.toFixed(1)} km · total {leg.cumKm.toFixed(1)} km</div>
+                      </div>
+                      <span className="mono muted" style={{ fontSize: 11.5, flexShrink: 0 }}>≈ {minToHhmm(leg.arrive)}</span>
+                    </div>
+                  ) : (
+                    <div key={leg.stop.orderId} style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '7px 0', borderTop: '0.5px solid var(--border)' }}>
+                      <span style={{ width: 22, height: 22, borderRadius: '50%', background: selInfo.color, color: '#fff', fontSize: 11, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{leg.n}</span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div className="mono" style={{ fontSize: 12.5 }}>{leg.stop.orderId}</div>
+                        <div className="muted" style={{ fontSize: 11 }}>{leg.stop.weight} units · +{leg.legKm.toFixed(1)} km · cum {leg.cumKm.toFixed(1)} km</div>
+                      </div>
+                      <span className="mono muted" style={{ fontSize: 11.5, flexShrink: 0 }}>≈ {minToHhmm(leg.arrive)}</span>
+                    </div>
+                  )
+                ))}
+              </div>
+              <div className="muted" style={{ fontSize: 11, marginTop: 8, lineHeight: 1.5 }}>
+                Stops are in the solver&rsquo;s optimized order. Arrival times (≈) are planned estimates at
+                {' '}{data.meta?.fleetSpeedKmph || 55} km/h + {data.meta?.serviceMinPerStop || 9} min/stop.
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="col">

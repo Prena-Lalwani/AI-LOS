@@ -454,20 +454,16 @@ def _path_distance(coords, order):
                for i in range(len(order) - 1))
 
 
-def _picking_route(product_locations, name_map):
-    # sample order: distinct product-locations from the busiest single warehouse
-    wh = product_locations["warehouse_id"].value_counts().idxmax()
-    pool = product_locations[product_locations["warehouse_id"] == wh].drop_duplicates("location_code")
-    # deterministic sample of 8 locations spread across the grid, then presented
-    # in *picklist order* (by product id) — i.e. the sequence the items happen to
-    # appear on the order, which is unrelated to their physical shelf position.
-    spread = pool.sort_values("location_code").iloc[::max(1, len(pool) // 8)].head(8)
-    sample = spread.sort_values("product_id").reset_index(drop=True)
-
+def _route_payload(sample, name_map, wh):
+    """Core: given a per-warehouse picklist (DataFrame with product_id +
+    location_code, in as-listed order), compute the naive vs OR-Tools TSP route
+    and the distance/time saved. Shared by the default example and the
+    user-driven /picking-route endpoint."""
+    sample = sample.reset_index(drop=True)
     DOCK = (0, 0, 0, 0)
     coords = [DOCK] + [_coords(c) for c in sample["location_code"]]
     labels = ["DOCK"] + list(sample["location_code"])
-    prod_at = ["—"] + [name_map[p] for p in sample["product_id"]]
+    prod_at = ["—"] + [name_map.get(p, p) for p in sample["product_id"]]
 
     # naive: walk the shelves in the order they appear on the picklist (as-listed)
     naive_order = list(range(len(coords)))
@@ -499,6 +495,54 @@ def _picking_route(product_locations, name_map):
         "optimizedDurationSec": _round(opt_time, 0),
         "timeSavedPct": _round(time_saved_pct, 1),
     }
+
+
+def _picking_route(product_locations, name_map):
+    """Default example: a deterministic 8-location sample from the busiest
+    warehouse, presented in picklist order (unrelated to physical position)."""
+    wh = product_locations["warehouse_id"].value_counts().idxmax()
+    pool = product_locations[product_locations["warehouse_id"] == wh].drop_duplicates("location_code")
+    spread = pool.sort_values("location_code").iloc[::max(1, len(pool) // 8)].head(8)
+    sample = spread.sort_values("product_id").reset_index(drop=True)
+    return _route_payload(sample, name_map, wh)
+
+
+def _picking_catalog(data):
+    """Products a picker can choose from, per warehouse (one representative shelf
+    each) — powers the frontend product selector."""
+    pl = data["product_locations"]
+    name_map = data["name"]
+    wh_name = dict(zip(data["warehouses"]["warehouse_id"], data["warehouses"]["name"]))
+    rep = pl.sort_values("location_code").drop_duplicates(["warehouse_id", "product_id"])
+    products = [{"productId": r.product_id, "name": name_map.get(r.product_id, r.product_id),
+                 "warehouseId": r.warehouse_id, "locationCode": r.location_code}
+                for r in rep.itertuples(index=False)]
+    warehouses = [{"warehouseId": w, "name": wh_name.get(w, w)}
+                  for w in sorted(pl["warehouse_id"].unique())]
+    return {"warehouses": warehouses, "products": products}
+
+
+def picking_route_for(warehouse=None, product_ids=None):
+    """Optimize a picking route for a USER-supplied set of products in one
+    warehouse. Each product resolves to one representative shelf in that
+    warehouse, kept in the order the user selected them (= the naive picklist).
+    Falls back to the default example if the selection is too small."""
+    data = _load()
+    pl = data["product_locations"]
+    name_map = data["name"]
+    if not warehouse:
+        warehouse = pl["warehouse_id"].value_counts().idxmax()
+    whp = pl[pl["warehouse_id"] == warehouse]
+    if product_ids:
+        rows = []
+        for pid in product_ids:                       # preserve user's pick order
+            m = whp[whp["product_id"] == pid]
+            if not m.empty:
+                rows.append(m.iloc[0])
+        if len(rows) >= 2:
+            sample = pd.DataFrame(rows).drop_duplicates("location_code").reset_index(drop=True)
+            return _route_payload(sample, name_map, warehouse)
+    return _picking_route(whp if len(whp) else pl, name_map)
 
 
 # --------------------------------------------------------------------------- #
@@ -545,6 +589,7 @@ def build_payload():
         "warehouseHeatmap": heatmap,
         "congestionAlerts": congestion,
         "pickingRouteExample": route,
+        "pickingCatalog": _picking_catalog(data),
         "meta": {
             "leadTimeDays": LEAD_TIME_DAYS,
             "serviceZ": SERVICE_Z,

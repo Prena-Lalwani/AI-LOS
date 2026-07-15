@@ -3,6 +3,7 @@ import PageHeader from '../../components/PageHeader.jsx';
 import KpiCard from '../../components/KpiCard.jsx';
 import TrendChart from '../../components/TrendChart.jsx';
 import DataTable from '../../components/DataTable.jsx';
+import RoiCard from '../../components/RoiCard.jsx';
 import { API_BASE } from '../../api.js';
 
 // Live data source: the FastAPI + Prophet backend (see backend/). Falls back to
@@ -117,6 +118,16 @@ export default function Demand() {
   return (
     <>
       {header}
+
+      <RoiCard
+        subtitle="Forecast → capacity planning"
+        items={[
+          { value: '~$28K/yr', label: 'Demand-driven staffing', note: 'right-size crews & trucks to the forecast (~5% labour flex)' },
+          { value: `${data.kpis[0]?.value}%`, label: 'Forecast accuracy', note: 'Prophet weekly model — fewer over/under-stocks' },
+          { value: 'Peak-ready', label: 'Capacity planning', note: 'auto crew/truck recommendation ahead of demand peaks' },
+        ]}
+        footnote="Accuracy is measured on a held-out window; savings are conservative estimates on the modeled operation."
+      />
 
       <div className="kpi-grid">
         {kpis.map((k) => (

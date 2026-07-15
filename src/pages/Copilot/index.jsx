@@ -1,11 +1,20 @@
 import { useEffect, useRef, useState } from 'react';
 import PageHeader from '../../components/PageHeader.jsx';
+import RoiCard from '../../components/RoiCard.jsx';
 import { initialMessages, suggestedPrompts, aiReply } from '../../data/copilot.js';
 
+// In-memory (cache) copy of the conversation — NOT a database. It keeps the
+// chat alive while navigating between pages, but a full browser refresh clears
+// the module and the chat resets to the starting messages.
+let cachedChat = null;
+
 export default function Copilot() {
-  const [messages, setMessages] = useState(initialMessages);
+  const [messages, setMessages] = useState(cachedChat || initialMessages);
   const [input, setInput] = useState('');
   const logRef = useRef(null);
+
+  // mirror the conversation into the cache so it survives route navigation
+  useEffect(() => { cachedChat = messages; }, [messages]);
 
   useEffect(() => {
     if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
@@ -25,6 +34,16 @@ export default function Copilot() {
   return (
     <>
       <PageHeader title="AI Operations Copilot" subtitle="Ask across all modules in natural language" />
+
+      <RoiCard
+        subtitle="Decision speed"
+        items={[
+          { value: 'Minutes → seconds', label: 'Time to an answer', note: 'ask in plain language instead of hunting across dashboards' },
+          { value: 'All 5 modules', label: 'One place to ask', note: 'demand, inventory, dispatch, fleet & executive combined' },
+          { value: 'Fewer handoffs', label: 'Self-serve insight', note: 'ops staff answer their own questions without an analyst' },
+        ]}
+        footnote="Productivity lever — value scales with how many people rely on the data day to day."
+      />
 
       <div className="split split--copilot">
         <div className="card" style={{ padding: 0 }}>

@@ -4,14 +4,25 @@ import HealthScoreRing from '../../components/HealthScoreRing.jsx';
 import AlertList from '../../components/AlertList.jsx';
 import TrendChart from '../../components/TrendChart.jsx';
 import ModuleCard from '../../components/ModuleCard.jsx';
+import RoiCard from '../../components/RoiCard.jsx';
 import { MODULES } from '../../modules.js';
 // Real data layer generated from the DataCo dataset (scripts/buildExecIntelligence.mjs).
 import execData from '../../data/execIntelligenceData.json';
-// Still-mock fixtures: the health sub-score bars, summary stats, recommendations
-// and the narrative Daily Summary aren't produced by the data layer yet.
-import { health, summaryStats, recommendations } from '../../data/exec.js';
+// Only the recommendation cards remain illustrative fixtures — the summary,
+// summary stats and health sub-scores are now derived from execData below.
+import { recommendations } from '../../data/exec.js';
 
 const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+const HEALTH_THRESHOLD = 75; // network health at/above this reads as on-track (teal)
+
+/** '2023-07' -> 'Jul 2023' for the trend legend. */
+function formatMonth(ym) {
+  const [y, m] = ym.split('-').map(Number);
+  return new Date(y, m - 1, 1).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+}
+/** signed % / points string for the narrative (e.g. -34.2 -> '−34.2%'). */
+const signed = (n, suffix) => `${n > 0 ? '+' : n < 0 ? '−' : ''}${Math.abs(n)}${suffix}`;
+const fmtM = (v) => `$${(v / 1e6).toFixed(1)}M`;
 
 // --- adapters: map the JSON shapes onto the props the existing components expect ---
 const usd = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
@@ -67,15 +78,60 @@ export default function Executive() {
   const trend = execData.trend.map((t) => ({ month: t.month, revenue: t.revenue / 1e6, profit: t.profit / 1e6 }));
   const revMax = Math.max(...trend.map((t) => t.revenue));
   const yMax = Math.ceil(revMax * 5) / 5; // round up to the next 0.2 for axis headroom
+  const trendRange = execData.trend.length
+    ? `${formatMonth(execData.trend[0].month)} – ${formatMonth(execData.trend.at(-1).month)}`
+    : '';
 
-  // Region roll-up has no UI slot on this page yet — available for a future regions view.
-  const regions = execData.regions; // eslint-disable-line no-unused-vars
+  // --- everything below is derived from the real data layer, so the narrative,
+  //     stat boxes and health bars can never contradict the KPI cards above. ---
+  const byLabel = Object.fromEntries(execData.kpis.map((k) => [k.label, k]));
+  const revenue = byLabel['Total Revenue'];
+  const profit = byLabel['Total Profit'];
+  const onTime = byLabel['On-Time Delivery'];
+  const orders = byLabel['Total Orders'];
+  const marginPct = revenue && profit ? (profit.value / revenue.value) * 100 : 0;
+
+  const healthScore = execData.healthScore;
+  const aboveTarget = healthScore >= HEALTH_THRESHOLD;
+
+  // regions ranked by revenue → drives the honest health sub-scores + narrative
+  const regionsBySales = [...execData.regions].sort((a, b) => b.sales - a.sales);
+  const topRegion = regionsBySales[0];
+  const onTimeVals = execData.regions.map((r) => r.onTimePct);
+  const otMin = Math.min(...onTimeVals);
+  const otMax = Math.max(...onTimeVals);
+
+  // sub-score bars = on-time delivery for the three biggest markets by revenue —
+  // real numbers that explain why the network score sits where it does.
+  const subScores = regionsBySales.slice(0, 3).map((r) => ({
+    label: r.region,
+    val: Math.round(r.onTimePct),
+    state: r.onTimePct >= HEALTH_THRESHOLD ? 'flow' : 'attention',
+  }));
+
+  // stat boxes inside the summary card, consistent with the ring + KPIs
+  const openExceptions = alerts.filter((a) => a.severity !== 'flow').length;
+  const summaryStats = [
+    { label: 'Network Health', value: String(healthScore), suffix: ' /100', variant: aboveTarget ? 'flow' : 'attention' },
+    { label: 'On-Time Delivery', value: `${onTime?.value ?? '—'}%`, variant: (onTime?.value ?? 0) >= HEALTH_THRESHOLD ? 'flow' : 'attention' },
+    { label: openExceptions ? 'Open Exceptions' : 'Active Alerts', value: String(openExceptions || alerts.length), variant: openExceptions ? 'attention' : 'flow' },
+  ];
 
   return (
     <>
       <PageHeader
         title="Executive Intelligence"
         subtitle={`Live operational overview · ${today} · Northeast & Midwest network`}
+      />
+
+      <RoiCard
+        subtitle="Platform-wide, conservative"
+        items={[
+          { value: '+16–24%', label: 'Net-profit lift', note: 'logistics savings across all modules flow to the bottom line' },
+          { value: '$212K', label: 'Working capital freed', state: 'attention', note: 'one-time — cash tied up in overstock' },
+          { value: '$124K', label: 'Per 1% on-time gain', note: `on-time delivery ${onTime.value}% → 80% target lifts retention & SLA` },
+        ]}
+        footnote="Estimated on the modeled operation (~$12.4M revenue/yr). Conservative & illustrative — scales with real volume. Each module page shows its own levers."
       />
 
       <div className="kpi-grid">
@@ -92,12 +148,14 @@ export default function Executive() {
               <h2 style={{ flex: 1 }}>Daily Summary</h2>
             </div>
             <p style={{ margin: 0, fontSize: 14, lineHeight: 1.62 }}>
-              The network is flowing within target. On-time delivery holds at <strong>94.2%</strong>, up 1.4 points
-              week-over-week on improved dwell times at the Columbus and Harrisburg hubs. Two areas need attention:
-              fleet utilization slipped to 87% after 3 units entered unplanned maintenance, and cost per mile rose to
-              $1.92 on elevated fuel pricing along the I-40 corridor. Revenue is pacing <strong>+8.1% MTD at $4.82M</strong>.
-              AI projects on-time recovery to 95.5% tomorrow if 4 tractors are rebalanced from the Midwest hub ahead of
-              the Thursday demand peak.
+              Network health is <strong>{healthScore} / 100</strong>, {aboveTarget ? 'above' : 'below'} the {HEALTH_THRESHOLD} target.
+              The primary drag is on-time delivery at <strong>{onTime.value}%</strong> ({signed(onTime.delta, ' pts')} vs last period),
+              and it holds within a tight <strong>{otMin}–{otMax}%</strong> band across every region — a systemic process gap,
+              not a local one. Revenue of <strong>{fmtM(revenue.value)}</strong> ({signed(revenue.delta, '%')}) and profit
+              of <strong>{fmtM(profit.value)}</strong> ({signed(profit.delta, '%')}) hold operating margin at
+              {' '}<strong>{marginPct.toFixed(1)}%</strong> across {orders.value.toLocaleString()} orders. {topRegion.region} is
+              the largest market at {fmtM(topRegion.sales)}. Recovering on-time delivery is the highest-leverage move —
+              each point regained flows straight to retention and margin.
             </p>
             <div className="summary-stats">
               {summaryStats.map((s) => (
@@ -118,7 +176,7 @@ export default function Executive() {
               <div className="legend">
                 <span className="legend__item"><span className="legend__line" style={{ background: 'var(--accent-flow)' }} />Revenue</span>
                 <span className="legend__item"><span className="legend__line" style={{ background: 'var(--accent-attention)' }} />Profit</span>
-                <span className="legend__item">Jan 2015 – Jan 2018</span>
+                <span className="legend__item">{trendRange}</span>
               </div>
             </div>
             <TrendChart
@@ -126,6 +184,7 @@ export default function Executive() {
               xKey="month"
               yDomain={[0, yMax]}
               yFormatter={(v) => `$${v.toFixed(1)}M`}
+              emphasizeLast
               area={{ key: 'revenue', color: 'var(--accent-flow-bg)' }}
               series={[
                 { key: 'profit', color: 'var(--accent-attention)', width: 2 },
@@ -138,12 +197,15 @@ export default function Executive() {
         <div className="col">
           <div className="card">
             <h2 style={{ marginBottom: 10 }}>Operational Health</h2>
-            <HealthScoreRing score={execData.healthScore} threshold={health.threshold} />
-            {health.subScores.map((s) => (
+            <HealthScoreRing score={healthScore} threshold={HEALTH_THRESHOLD} />
+            <div className="muted" style={{ fontSize: 11, margin: '2px 0 10px' }}>
+              On-time delivery · top {subScores.length} markets by revenue
+            </div>
+            {subScores.map((s) => (
               <div className="subscore" key={s.label}>
                 <span className="subscore__label">{s.label}</span>
                 <span className="bar"><span className={`bar__fill s-${s.state}`} style={{ width: `${s.val}%` }} /></span>
-                <span className="subscore__value">{s.val}</span>
+                <span className="subscore__value">{s.val}%</span>
               </div>
             ))}
           </div>

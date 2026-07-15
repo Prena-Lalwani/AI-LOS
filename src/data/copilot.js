@@ -1,23 +1,7 @@
 export const initialMessages = [
-  { role: 'user', text: 'Why did on-time delivery drop in the Midwest yesterday?' },
   {
     role: 'ai',
-    text: 'On-time in the Midwest fell to 88.4% yesterday — 5.8 points below target. Root cause analysis points to three drivers:',
-    bullets: [
-      'Dock congestion at Columbus (WH3) added ~42 min average dwell',
-      '2 tractors down for unplanned maintenance on the RT-40 corridor',
-      'Weather delay on I-70 between 07:00 and 10:00',
-    ],
-  },
-  { role: 'user', text: 'What should we do to recover tomorrow?' },
-  {
-    role: 'ai',
-    text: 'To recover to a projected 95.5% tomorrow, I recommend:',
-    bullets: [
-      'Rebalance 4 tractors from the Midwest hub ahead of the Thursday peak',
-      'Extend picking hours at WH3 by 2 hours to clear the dock backlog',
-      'Pre-stage 6 trucks for the Thu 13:00–17:00 demand window',
-    ],
+    text: "Hi — I'm your AI Operations Copilot. Ask me anything across demand, inventory, dispatch, fleet or executive metrics. Pick a suggested prompt below or type your own question to get started.",
   },
 ];
 

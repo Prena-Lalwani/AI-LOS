@@ -429,6 +429,9 @@ def build_plan(date=None, delay=None):
             "path": [depot_ll] + [[coords[node][0], coords[node][1]] for node in r["nodes"]] + [depot_ll],
             "stops": [{"lat": coords[node][0], "lng": coords[node][1],
                        "orderId": solved["orderRef"][node].order_id,
+                       "customerId": solved["orderRef"][node].customer_id,
+                       "windowStart": solved["orderRef"][node].time_window_start,
+                       "windowEnd": solved["orderRef"][node].time_window_end,
                        "weight": int(solved["demands"][node])} for node in r["nodes"]],
         })
 

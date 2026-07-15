@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { MapContainer, TileLayer, Polyline, CircleMarker, Tooltip } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import PageHeader from '../../components/PageHeader.jsx';
 import KpiCard from '../../components/KpiCard.jsx';
 import DataTable, { StatusCell } from '../../components/DataTable.jsx';
+import RoiCard from '../../components/RoiCard.jsx';
 import { API_BASE } from '../../api.js';
+import { useTheme } from '../../theme/ThemeContext.jsx';
 
 // Live data source: the FastAPI backend (see backend/models/dispatch_intelligence.py).
 // The plan is a real OR-Tools CVRPTW solve over haversine distances plus a
@@ -43,10 +46,23 @@ const statusOf = (r) => {
   return { label: 'Optimized', state: 'flow' };
 };
 
+// Session-scoped memory of the isolated truck, so navigating to a detail page
+// and pressing Back restores the same selection (survives the remount).
+let cachedSel = null;
+
 export default function Dispatch() {
+  const { theme } = useTheme();
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
-  const [sel, setSel] = useState(null);   // selected route index; null = show all
+  const [sel, setSelState] = useState(cachedSel);
+  const setSel = (v) => { cachedSel = v; setSelState(v); };
+  const [roadPaths, setRoadPaths] = useState({}); // route idx -> [[lat,lng],…] snapped to roads
+
+  // CARTO basemap that matches the active app theme so the map panel never
+  // renders a dark rectangle inside a light page (and vice-versa).
+  const tileUrl = theme === 'dark'
+    ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+    : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
 
   useEffect(() => {
     let alive = true;
@@ -56,6 +72,29 @@ export default function Dispatch() {
       .catch((e) => { if (alive) setError(e.message); });
     return () => { alive = false; };
   }, []);
+
+  // Snap each route's straight legs onto real roads via OSRM's free routing
+  // demo (no API key). The solver already fixed the STOP ORDER; here we only
+  // fetch the driving geometry that connects those stops so the polyline
+  // follows streets instead of flying in a straight line. If OSRM is
+  // unreachable, the route keeps its straight-line path (graceful fallback).
+  useEffect(() => {
+    if (!data?.geo?.routes?.length) return undefined;
+    let alive = true;
+    const OSRM = 'https://router.project-osrm.org/route/v1/driving/';
+    data.geo.routes.forEach((r) => {
+      const coords = r.path.map(([lat, lng]) => `${lng},${lat}`).join(';');
+      fetch(`${OSRM}${coords}?overview=full&geometries=geojson`)
+        .then((res) => (res.ok ? res.json() : Promise.reject(new Error('osrm'))))
+        .then((j) => {
+          const geo = j?.routes?.[0]?.geometry?.coordinates;
+          if (!alive || !geo) return;
+          setRoadPaths((prev) => ({ ...prev, [r.route]: geo.map(([lng, lat]) => [lat, lng]) }));
+        })
+        .catch(() => { /* keep the straight-line fallback for this route */ });
+    });
+    return () => { alive = false; };
+  }, [data]);
 
   const header = (
     <PageHeader
@@ -72,11 +111,14 @@ export default function Dispatch() {
     return (
       <>
         {header}
-        <div className="card" style={{ maxWidth: 640 }}>
-          <h2 style={{ marginBottom: 8 }}>Dispatch API unavailable</h2>
+        <div className="card" style={{ maxWidth: 640, borderLeft: '3px solid var(--accent-attention)' }}>
+          <h2 style={{ marginBottom: 8 }}>Live dispatch data is temporarily unavailable</h2>
           <p className="muted" style={{ margin: 0, fontSize: 13, lineHeight: 1.55 }}>
-            Could not reach the dispatch service at <span className="mono">{API_URL}</span> ({error}).
-            Start it with <span className="mono">cd backend &amp;&amp; uvicorn main:app --port 8000</span>.
+            We couldn&rsquo;t reach the routing service just now. Today&rsquo;s optimized plan will
+            appear here as soon as the connection is restored — try refreshing in a moment.
+          </p>
+          <p className="muted" style={{ margin: '10px 0 0', fontSize: 11, opacity: 0.7 }}>
+            <span className="mono">{error}</span> · {API_URL}
           </p>
         </div>
       </>
@@ -95,6 +137,9 @@ export default function Dispatch() {
   const { routes, delayRisk, overtimeFlags, loadBalancing, geo, unassignedCount } = data;
   const totalFuelCost = routes.reduce((s, r) => s + r.fuelCost, 0);
   const totalLitres = routes.reduce((s, r) => s + r.fuelLitres, 0);
+
+  // driver lookup for the flag panels (flags carry vehicleId, not driverId)
+  const driverIdByVehicle = Object.fromEntries(routes.map((r) => [r.vehicleId, r.driverId]));
 
   // fit-bounds for the real map: depot + every delivery stop
   const allPts = [[geo.depot.lat, geo.depot.lng],
@@ -116,19 +161,32 @@ export default function Dispatch() {
     if (!g) return null;
     const speed = data.meta?.fleetSpeedKmph || 55;
     const svc = data.meta?.serviceMinPerStop || 9;
+    const breakAfter = data.meta?.breakAfterMin || 240;   // 4h of work
+    const breakDur = data.meta?.breakDurationMin || 30;   // 30-min rest
     const path = g.path;                       // [depot, s1, ..., depot]
+    const startMin = hhmmToMin(r.startTime);
+    // the VRP gives long shifts a mandatory break; show it when this route runs
+    // longer than the break threshold (short routes skip it, same as the solver).
+    const takesBreak = (r.plannedDurationMin || 0) > breakAfter;
     let cum = 0;
-    let t = hhmmToMin(r.startTime);
+    let t = startMin;
+    let breakDone = false;
     const legs = [];
     for (let k = 1; k < path.length; k += 1) {
       const legKm = havKm(path[k - 1], path[k]);
       cum += legKm;
       t += (legKm / speed) * 60;
       const isReturn = k === path.length - 1;
+      // insert the driver's rest break once ~4h of driving has elapsed
+      if (takesBreak && !breakDone && (t - startMin) >= breakAfter) {
+        legs.push({ isBreak: true, arrive: t, durationMin: breakDur });
+        t += breakDur;
+        breakDone = true;
+      }
       legs.push({ n: k, legKm, cumKm: cum, arrive: t, stop: isReturn ? null : g.stops[k - 1], isReturn });
       if (!isReturn) t += svc;
     }
-    return { r, legs, color: routeColor(sel) };
+    return { r, legs, color: routeColor(sel), tookBreak: breakDone, breakDur };
   })();
 
   const rows = routes.map((r, i) => {
@@ -137,9 +195,9 @@ export default function Dispatch() {
   });
   const columns = [
     { header: 'Truck', cell: (r) => (
-      <span className="mono" style={{ color: r._color }}>■ <span className="muted">{r.vehicleId}</span></span>
+      <span className="mono" style={{ color: r._color }}>■ <Link className="link-id" to={`/fleet/truck/${r.vehicleId}`}>{r.vehicleId}</Link></span>
     ) },
-    { header: 'Driver', cell: (r) => r.driver },
+    { header: 'Driver', cell: (r) => <Link className="link-id" to={`/fleet/driver/${r.driverId}`}>{r.driver}</Link> },
     { header: 'Stops', cell: (r) => <span className="mono">{r.numStops}</span> },
     { header: 'Dist', cell: (r) => <span className="mono">{r.distanceKm}km</span> },
     { header: 'Load', cell: (r) => <span className="mono">{r.capacityUtilizationPct}%</span> },
@@ -151,10 +209,25 @@ export default function Dispatch() {
     <>
       {header}
 
+      <RoiCard
+        subtitle="Routing, fuel & delays"
+        items={[
+          { value: '$18–22K/yr', label: 'Routing & fuel', note: 'VRP-optimized routes · ~12% mileage-linked fuel & running cost' },
+          { value: `${loadBalancing.avgUtilizationPct}%`, label: 'Avg load factor', note: 'fuller trucks → fewer trips for the same orders' },
+          { value: `${delayRisk.flags.length + overtimeFlags.length}`, label: 'Delays caught early', state: (delayRisk.flags.length + overtimeFlags.length) ? 'attention' : 'flow', note: 'reroute / overtime flagged before dispatch, not after' },
+        ]}
+        footnote="Load factor and delay flags are live from today's plan; the fuel/routing saving is a conservative estimate on the modeled fleet."
+      />
+
       <div className="kpi-grid">
-        {data.kpis.map((k) => (
-          <KpiCard key={k.label} label={k.label} value={String(k.value)} delta={k.delta} state={k.state} />
-        ))}
+        {data.kpis.map((k) => {
+          // strip the cryptic warehouse code (e.g. "WH2 · ") from KPI captions —
+          // the warehouse name already shows in the page subtitle.
+          const delta = typeof k.delta === 'string'
+            ? k.delta.replace(`${data.warehouseId} · `, '')
+            : k.delta;
+          return <KpiCard key={k.label} label={k.label} value={String(k.value)} delta={delta} state={k.state} />;
+        })}
       </div>
 
       <div className="split">
@@ -171,7 +244,7 @@ export default function Dispatch() {
 
           <div className="card">
             <div className="card__head" style={{ justifyContent: 'space-between' }}>
-              <h2>Optimized Route Map · {data.warehouseId}</h2>
+              <h2>Optimized Route Map · {data.warehouseName}</h2>
               <span className="muted" style={{ fontSize: 12 }}>
                 {sel === null ? 'click a truck below to isolate its route' : `showing ${routes[sel].vehicleId} only`}
               </span>
@@ -180,12 +253,13 @@ export default function Dispatch() {
               <MapContainer bounds={bounds} boundsOptions={{ padding: [30, 30] }}
                 style={{ height: '100%', width: '100%', background: 'var(--bg-page)' }} scrollWheelZoom={false}>
                 <TileLayer
-                  url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+                  key={theme}
+                  url={tileUrl}
                   subdomains="abcd"
                   attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
                 />
                 {visibleRoutes.map((r) => (
-                  <Polyline key={r.vehicleId} positions={r.path}
+                  <Polyline key={r.vehicleId} positions={roadPaths[r.route] || r.path}
                     pathOptions={{ color: routeColor(r.route), weight: sel === null ? 2 : 3,
                       opacity: 0.85, dashArray: r.reroute ? '6 5' : undefined }} />
                 ))}
@@ -197,7 +271,7 @@ export default function Dispatch() {
                 )))}
                 <CircleMarker center={[geo.depot.lat, geo.depot.lng]} radius={8}
                   pathOptions={{ color: '#ffffff', fillColor: '#ffae42', fillOpacity: 1, weight: 2 }}>
-                  <Tooltip permanent direction="right">{geo.depot.label} depot</Tooltip>
+                  <Tooltip direction="top">Warehouse · {data.warehouseName}</Tooltip>
                 </CircleMarker>
               </MapContainer>
             </div>
@@ -221,27 +295,35 @@ export default function Dispatch() {
                     outline: sel === i ? `1.5px solid ${routeColor(i)}` : 'none' }}>
                   <span style={{ width: 12, height: 3, borderRadius: 2, background: routeColor(i), display: 'inline-block' }} />
                   <span className="mono">{r.vehicleId}</span>
-                  {(r.rerouteRecommended || r.overtimeRisk) && <span className="s-attention"> ⚠</span>}
                 </button>
               ))}
             </div>
             <div className="muted" style={{ fontSize: 12, marginTop: 8, lineHeight: 1.5 }}>
               {sel === null
-                ? `${routes.length} vehicle routes from ${data.warehouseName}, ${data.totalDistanceKm} km total — one colour per truck, each dot a delivery stop in optimized order. ⚠ = predicted delay / overtime risk.`
+                ? `${routes.length} vehicle routes from ${data.warehouseName}, ${data.totalDistanceKm} km total — one colour per truck, each dot a delivery stop in optimized order, lines follow real roads.`
                 : `${routes[sel].vehicleId} · ${routes[sel].driver} — ${routes[sel].numStops} stops, ${routes[sel].distanceKm} km, ${routes[sel].startTime}–${routes[sel].endTime}. Click again or “All routes” to reset.`}
+            </div>
+            {/* key for the depot marker (the permanent label was removed from the map) */}
+            <div className="legend" style={{ marginTop: 6 }}>
+              <span className="legend__item">
+                <span style={{ width: 11, height: 11, borderRadius: '50%', background: '#ffae42',
+                  border: '1.5px solid var(--bg-panel)', boxShadow: '0 0 0 1px var(--border-strong)',
+                  display: 'inline-block', flexShrink: 0 }} />
+                Orange circle = warehouse ({data.warehouseName}) — routes start &amp; end here
+              </span>
             </div>
           </div>
 
           {selInfo && (
             <div className="card">
               <div className="card__head" style={{ justifyContent: 'space-between' }}>
-                <h2><span style={{ color: selInfo.color }}>■ </span>{selInfo.r.vehicleId} · Itinerary</h2>
+                <h2><span style={{ color: selInfo.color }}>■ </span><Link className="link-id" to={`/fleet/truck/${selInfo.r.vehicleId}`}>{selInfo.r.vehicleId}</Link> · Itinerary</h2>
                 <button className="btn btn--sm" onClick={() => setSel(null)}>Show all</button>
               </div>
               <div className="muted" style={{ fontSize: 12, marginBottom: 10, lineHeight: 1.5 }}>
-                {selInfo.r.driver} · from {data.warehouseName} ({data.warehouseId}) · {selInfo.r.numStops} stops ·
-                {' '}{selInfo.r.distanceKm} km · {selInfo.r.startTime}–{selInfo.r.endTime} · load {selInfo.r.capacityUtilizationPct}%
-                {selInfo.r.needsFuelStop ? ` · refuel @ ${selInfo.r.nearestStation}` : ''}
+                Driver <Link className="link-id" to={`/fleet/driver/${selInfo.r.driverId}`}>{selInfo.r.driver}</Link> · {selInfo.r.numStops} deliveries from {data.warehouseName} ·
+                {' '}{selInfo.r.distanceKm} km · runs {selInfo.r.startTime} to {selInfo.r.endTime} · truck {selInfo.r.capacityUtilizationPct}% full
+                {selInfo.r.needsFuelStop ? ` · refuels at ${selInfo.r.nearestStation}` : ''}
               </div>
 
               <div style={{ maxHeight: 340, overflowY: 'auto', paddingRight: 4 }}>
@@ -249,19 +331,33 @@ export default function Dispatch() {
                 <div style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '7px 0' }}>
                   <span style={{ width: 22, height: 22, borderRadius: 5, background: 'var(--accent-attention)', color: 'var(--on-accent)', fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>◆</span>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 12.5, fontWeight: 600 }}>{data.warehouseId} Depot</div>
-                    <div className="muted" style={{ fontSize: 11 }}>Departure</div>
+                    <div style={{ fontSize: 12.5, fontWeight: 600 }}>Start · {data.warehouseName}</div>
+                    <div className="muted" style={{ fontSize: 11 }}>Truck leaves the warehouse</div>
                   </div>
                   <span className="mono muted" style={{ fontSize: 11.5, flexShrink: 0 }}>{selInfo.r.startTime}</span>
                 </div>
 
                 {selInfo.legs.map((leg) => (
-                  leg.isReturn ? (
+                  leg.isBreak ? (
+                    <div key="break" style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '7px 0', borderTop: '0.5px dashed var(--accent-attention)' }}>
+                      <span style={{ width: 22, height: 22, borderRadius: 5, background: 'var(--accent-attention-bg)', color: 'var(--accent-attention)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, border: '1px solid var(--accent-attention)' }}>
+                        <span style={{ display: 'inline-flex', gap: 2 }}>
+                          <span style={{ width: 2, height: 9, background: 'currentColor', borderRadius: 1 }} />
+                          <span style={{ width: 2, height: 9, background: 'currentColor', borderRadius: 1 }} />
+                        </span>
+                      </span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div className="s-attention" style={{ fontSize: 12.5, fontWeight: 600 }}>Rest break · {leg.durationMin} min</div>
+                        <div className="muted" style={{ fontSize: 11 }}>Mandatory driver break after 4h of driving</div>
+                      </div>
+                      <span className="mono muted" style={{ fontSize: 11.5, flexShrink: 0 }}>~{minToHhmm(leg.arrive)}–{minToHhmm(leg.arrive + leg.durationMin)}</span>
+                    </div>
+                  ) : leg.isReturn ? (
                     <div key="return" style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '7px 0', borderTop: '0.5px solid var(--border)' }}>
                       <span style={{ width: 22, height: 22, borderRadius: 5, background: 'var(--accent-attention)', color: 'var(--on-accent)', fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>◆</span>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 12.5, fontWeight: 600 }}>Return to {data.warehouseId}</div>
-                        <div className="muted" style={{ fontSize: 11 }}>+{leg.legKm.toFixed(1)} km · total {leg.cumKm.toFixed(1)} km</div>
+                        <div style={{ fontSize: 12.5, fontWeight: 600 }}>Back to {data.warehouseName}</div>
+                        <div className="muted" style={{ fontSize: 11 }}>Route complete · {leg.cumKm.toFixed(1)} km driven in total</div>
                       </div>
                       <span className="mono muted" style={{ fontSize: 11.5, flexShrink: 0 }}>≈ {minToHhmm(leg.arrive)}</span>
                     </div>
@@ -269,17 +365,28 @@ export default function Dispatch() {
                     <div key={leg.stop.orderId} style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '7px 0', borderTop: '0.5px solid var(--border)' }}>
                       <span style={{ width: 22, height: 22, borderRadius: '50%', background: selInfo.color, color: '#fff', fontSize: 11, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{leg.n}</span>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div className="mono" style={{ fontSize: 12.5 }}>{leg.stop.orderId}</div>
-                        <div className="muted" style={{ fontSize: 11 }}>{leg.stop.weight} units · +{leg.legKm.toFixed(1)} km · cum {leg.cumKm.toFixed(1)} km</div>
+                        <div style={{ fontSize: 12.5, fontWeight: 600 }}>
+                          Stop {leg.n} of {selInfo.r.numStops}
+                          <span className="mono muted" style={{ fontWeight: 400, fontSize: 11 }}> · {leg.stop.orderId}</span>
+                        </div>
+                        <div className="muted" style={{ fontSize: 11 }}>
+                          Drop off {leg.stop.weight} units
+                          {leg.stop.customerId ? ` · customer ${leg.stop.customerId}` : ''}
+                          {` · ${leg.legKm.toFixed(1)} km from previous stop`}
+                          {leg.stop.windowStart ? ` · deliver by ${leg.stop.windowStart}–${leg.stop.windowEnd}` : ''}
+                        </div>
                       </div>
-                      <span className="mono muted" style={{ fontSize: 11.5, flexShrink: 0 }}>≈ {minToHhmm(leg.arrive)}</span>
+                      <span className="mono muted" style={{ fontSize: 11.5, flexShrink: 0 }}>arrive ~{minToHhmm(leg.arrive)}</span>
                     </div>
                   )
                 ))}
               </div>
               <div className="muted" style={{ fontSize: 11, marginTop: 8, lineHeight: 1.5 }}>
-                Stops are in the solver&rsquo;s optimized order. Arrival times (≈) are planned estimates at
-                {' '}{data.meta?.fleetSpeedKmph || 55} km/h + {data.meta?.serviceMinPerStop || 9} min/stop.
+                Stops are shown in the best order our route planner found. The “arrive ~” times are estimates
+                (driving at {data.meta?.fleetSpeedKmph || 55} km/h with about {data.meta?.serviceMinPerStop || 9} min at each stop) — not fixed appointment times.
+                {selInfo.tookBreak
+                  ? ` A ${selInfo.breakDur}-min rest break is included after 4h of driving.`
+                  : ' This route is short enough that no rest break is required.'}
               </div>
             </div>
           )}
@@ -310,8 +417,8 @@ export default function Dispatch() {
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <span className="dot s-critical" />
-                      <span style={{ fontWeight: 500, fontSize: 13 }}>{f.driver}</span>
-                      <span className="mono muted" style={{ fontSize: 11 }}>{f.vehicleId}</span>
+                      <Link className="link-id" to={`/fleet/driver/${driverIdByVehicle[f.vehicleId]}`} style={{ fontWeight: 500, fontSize: 13 }}>{f.driver}</Link>
+                      <Link className="link-id mono" to={`/fleet/truck/${f.vehicleId}`} style={{ fontSize: 11 }}>{f.vehicleId}</Link>
                       <span className="mono s-critical" style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 600 }}>{f.overMin} min over shift</span>
                     </div>
                     <div className="muted" style={{ fontSize: 11.5, marginTop: 5 }}>
@@ -326,8 +433,8 @@ export default function Dispatch() {
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <span className="dot s-attention" />
-                      <span style={{ fontWeight: 500, fontSize: 13 }}>{f.driver}</span>
-                      <span className="mono muted" style={{ fontSize: 11 }}>{f.vehicleId}</span>
+                      <Link className="link-id" to={`/fleet/driver/${driverIdByVehicle[f.vehicleId]}`} style={{ fontWeight: 500, fontSize: 13 }}>{f.driver}</Link>
+                      <Link className="link-id mono" to={`/fleet/truck/${f.vehicleId}`} style={{ fontSize: 11 }}>{f.vehicleId}</Link>
                       <span className="mono s-attention" style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 600 }}>{f.overshootMin} min slower</span>
                     </div>
                     <div className="muted" style={{ fontSize: 11.5, marginTop: 5 }}>
@@ -358,7 +465,7 @@ export default function Dispatch() {
               <div className="alert-row" key={r.vehicleId}>
                 <span className="dot" style={{ marginTop: 4, background: routeColor(i) }} />
                 <span className="alert-row__text">
-                  {r.vehicleId}
+                  <Link className="link-id" to={`/fleet/truck/${r.vehicleId}`}>{r.vehicleId}</Link>
                   <span className="muted" style={{ fontSize: 11 }}> · {Math.round(r.distanceKm)} km route</span>
                   {r.needsFuelStop && <span className="s-attention" style={{ fontSize: 11 }}> · refuel at {r.nearestStation}</span>}
                 </span>
@@ -383,7 +490,7 @@ export default function Dispatch() {
               return (
                 <div key={r.vehicleId} style={{ marginBottom: 10 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 3 }}>
-                    <span className="mono muted">{r.vehicleId} · {r.load.toLocaleString()} / {r.capacity.toLocaleString()} units</span>
+                    <span className="mono muted"><Link className="link-id" to={`/fleet/truck/${r.vehicleId}`}>{r.vehicleId}</Link> · {r.load.toLocaleString()} / {r.capacity.toLocaleString()} units</span>
                     <span className="mono" style={{ color: barColor }}>
                       {r.capacityUtilizationPct}% full{under ? ' · underused' : over ? ' · overloaded' : ''}
                     </span>

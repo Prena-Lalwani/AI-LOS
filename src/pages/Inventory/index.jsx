@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Fragment } from 'react';
 import PageHeader from '../../components/PageHeader.jsx';
 import KpiCard from '../../components/KpiCard.jsx';
 import DataTable, { StatusCell } from '../../components/DataTable.jsx';
+import RoiCard from '../../components/RoiCard.jsx';
 import { API_BASE } from '../../api.js';
 
 // Live data source: the FastAPI backend (see backend/models/inventory_intelligence.py).
@@ -160,6 +161,16 @@ export default function Inventory() {
     <>
       {header}
 
+      <RoiCard
+        subtitle="Capital, labour & lost-sales"
+        items={[
+          { value: `$${Math.round(data.overstock.totalExcessValue / 1000)}K`, label: 'Overstock capital', state: 'attention', note: `${data.overstock.count} SKUs to right-size · ~$${Math.round(data.overstock.totalExcessValue * 0.25 / 1000)}K/yr carrying cost saved` },
+          { value: `−${data.pickingRouteExample.timeSavedPct}%`, label: 'Pick-tour time', note: 'OR-Tools route vs naive picklist → ~$50K/yr picker labour' },
+          { value: '$70–100K/yr', label: 'Stock-out recovery', note: `${data.stockOutPredictions.atRiskCount} SKUs flagged ${data.meta.leadTimeDays} days early` },
+        ]}
+        footnote="Overstock value and pick-time saving are computed live from this dashboard; carrying cost @ 25%/yr and stock-out recovery are conservative estimates."
+      />
+
       <div className="kpi-grid">
         {data.kpis.map((k) => (
           <KpiCard key={k.label} label={k.label} value={String(k.value)} delta={k.delta} state={k.state} />
@@ -169,15 +180,6 @@ export default function Inventory() {
       <div className="split">
         <div className="col">
           <div className="card">
-            <div className="card__head">              <h2>Reorder Recommendations</h2>
-              <span className="muted" style={{ fontSize: 12, marginLeft: 'auto' }}>
-                {reorderRecommendations.flaggedCount} flagged · EOQ · 7-day lead time
-              </span>
-            </div>
-            <DataTable columns={columns} rows={reorderRows} keyField="id" template="1.6fr 1.3fr .7fr .7fr .8fr 1.1fr" />
-          </div>
-
-          <div className="card">
             <div className="card__head" style={{ justifyContent: 'space-between' }}>
               <h2>Warehouse Heatmap · {heatWarehouse.name}</h2>
               <select className="date-input" value={wh} onChange={(e) => changeWh(e.target.value)}>
@@ -186,37 +188,52 @@ export default function Inventory() {
                 ))}
               </select>
             </div>
-            <div className="legend" style={{ marginBottom: 10 }}>
-              <span className="legend__item"><span className="legend__swatch" style={{ background: 'var(--accent-flow-bg)' }} />Idle</span>
+            <p className="muted" style={{ margin: '0 0 12px', fontSize: 12, lineHeight: 1.5 }}>
+              {heatWarehouse.zones} zones (rows A–{String.fromCharCode(64 + heatWarehouse.zones)}) × {heatWarehouse.aisles} aisles.
+              Each cell shows how busy that aisle is (occupancy + picks) and how many catalogued items sit there.
+              Items ticked in the picking panel below get a teal ring.
+            </p>
+            {(() => {
+              const cellByZA = Object.fromEntries(heatWarehouse.cells.map((c) => [`${c.zone}-${c.aisle}`, c]));
+              const zoneNums = Array.from({ length: heatWarehouse.zones }, (_, i) => i + 1);
+              const aisleNums = Array.from({ length: heatWarehouse.aisles }, (_, i) => i + 1);
+              return (
+                <div style={{ display: 'grid', gridTemplateColumns: `22px repeat(${heatWarehouse.aisles}, 1fr)`, gap: 5 }}>
+                  <div className="heat-axis" />
+                  {aisleNums.map((a) => <div key={`col${a}`} className="heat-axis">{a}</div>)}
+                  {zoneNums.map((z) => (
+                    <Fragment key={`row${z}`}>
+                      <div className="heat-axis">{String.fromCharCode(64 + z)}</div>
+                      {aisleNums.map((a) => {
+                        const cellKey = `${z}-${a}`;
+                        const c = cellByZA[cellKey];
+                        const util = c ? c.utilization : 0;
+                        const items = cellProducts[cellKey] || [];
+                        const picked = pickedCells.has(cellKey);
+                        return (
+                          <div
+                            key={cellKey}
+                            className={`heat-cell ${heatBucket(util)}`}
+                            style={{ boxShadow: picked ? 'inset 0 0 0 2px var(--accent-flow)' : undefined }}
+                            title={`${String.fromCharCode(64 + z)}${a} · Zone ${z} Aisle ${a} — utilization ${util}%, ${c ? c.pickCount : 0} picks`
+                              + (items.length ? `\nItems: ${items.join(', ')}` : '\nNo catalogued items')}
+                          >
+                            <span className="heat-cell__util">{util}%</span>
+                            <span className="heat-cell__items">{items.length ? `${items.length} item${items.length > 1 ? 's' : ''}` : 'no items'}</span>
+                          </div>
+                        );
+                      })}
+                    </Fragment>
+                  ))}
+                </div>
+              );
+            })()}
+            <div className="legend" style={{ marginTop: 12 }}>
+              <span className="legend__item"><span className="legend__swatch" style={{ background: 'var(--accent-flow-bg)' }} />Idle &lt;55%</span>
               <span className="legend__item"><span className="legend__swatch" style={{ background: 'var(--accent-flow)' }} />Normal</span>
               <span className="legend__item"><span className="legend__swatch" style={{ background: 'var(--accent-attention-bg)' }} />Busy</span>
-              <span className="legend__item"><span className="legend__swatch" style={{ background: 'var(--accent-attention)' }} />Congested</span>
+              <span className="legend__item"><span className="legend__swatch" style={{ background: 'var(--accent-attention)' }} />Congested &gt;90%</span>
               <span className="legend__item"><span className="legend__swatch" style={{ background: 'transparent', boxShadow: 'inset 0 0 0 2px var(--accent-flow)' }} />Pick item</span>
-            </div>
-            <div className="heatmap" style={{ gridTemplateColumns: `repeat(${heatWarehouse.aisles}, 1fr)` }}>
-              {heatWarehouse.cells.map((c) => {
-                const cellKey = `${c.zone}-${c.aisle}`;
-                const items = cellProducts[cellKey] || [];
-                const picked = pickedCells.has(cellKey);
-                const label = `${String.fromCharCode(64 + c.zone)}${c.aisle}`;
-                return (
-                  <div
-                    key={cellKey}
-                    className={`heat-cell ${heatBucket(c.utilization)}`}
-                    style={{ flexDirection: 'column', gap: 1, lineHeight: 1,
-                      boxShadow: picked ? 'inset 0 0 0 2px var(--accent-flow)' : undefined }}
-                    title={`${label} · Zone ${c.zone} Aisle ${c.aisle} — util ${c.utilization}, ${c.pickCount} picks`
-                      + (items.length ? `\nItems here: ${items.join(', ')}` : '\nNo catalogued items')}
-                  >
-                    <span style={{ fontWeight: 600 }}>{label}</span>
-                    <span style={{ opacity: 0.72, fontSize: 9 }}>{items.length ? `${items.length} item${items.length > 1 ? 's' : ''}` : c.utilization}</span>
-                  </div>
-                );
-              })}
-            </div>
-            <div className="muted" style={{ fontSize: 12, marginTop: 10, lineHeight: 1.5 }}>
-              {heatWarehouse.zones} zones × {heatWarehouse.aisles} aisles · colour = occupancy + pick activity, cell shows
-              how many catalogued items sit there. Hover for the item list; ticked pick items below get a teal ring.
             </div>
           </div>
 
@@ -225,7 +242,7 @@ export default function Inventory() {
               <h2>Picking Route Optimization · {wh}</h2>
             </div>
             <p className="muted" style={{ margin: '0 0 8px', fontSize: 12 }}>
-              Tick the items to collect — they light up on the map above — then optimize the picker&rsquo;s
+              Tick the items to collect — they light up on the warehouse heatmap above — then optimize the picker&rsquo;s
               walking route (OR-Tools TSP).
             </p>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, maxHeight: 104, overflowY: 'auto', marginBottom: 10 }}>
@@ -273,6 +290,14 @@ export default function Inventory() {
                 {pickBusy ? 'Optimizing route…' : 'Select items and optimize to see the route.'}
               </div>
             )}
+          </div>
+          <div className="card">
+            <div className="card__head">              <h2>Reorder Recommendations</h2>
+              <span className="muted" style={{ fontSize: 12, marginLeft: 'auto' }}>
+                {reorderRecommendations.flaggedCount} flagged · EOQ · 7-day lead time
+              </span>
+            </div>
+            <DataTable columns={columns} rows={reorderRows} keyField="id" template="1.6fr 1.3fr .7fr .7fr .8fr 1.1fr" />
           </div>
         </div>
 

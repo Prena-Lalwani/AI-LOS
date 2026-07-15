@@ -20,9 +20,11 @@ export default function Sidebar({ mobileOpen = false, onNavigate }) {
             to={m.path}
             end={m.path === '/'}
             onClick={onNavigate}
+            title={m.label}
+            aria-label={m.label}
             className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}
           >
-            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round">
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" aria-hidden="true">
               <path d={m.icon} />
             </svg>
             <span>{m.label}</span>

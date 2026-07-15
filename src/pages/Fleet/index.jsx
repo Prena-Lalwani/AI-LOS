@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import PageHeader from '../../components/PageHeader.jsx';
 import KpiCard from '../../components/KpiCard.jsx';
 import DataTable, { StatusCell } from '../../components/DataTable.jsx';
 import TrendChart from '../../components/TrendChart.jsx';
+import RoiCard from '../../components/RoiCard.jsx';
 import { API_BASE } from '../../api.js';
 
 // Live data source: the FastAPI backend (see backend/models/fleet_intelligence.py).
@@ -79,7 +81,7 @@ export default function Fleet() {
   // ---- Predictive maintenance: top vehicles by breakdown risk --------------
   const riskRows = maintenanceRisk.vehicles.slice(0, 8);
   const riskCols = [
-    { header: 'Vehicle', cell: (r) => <span className="mono muted">{r.vehicleId}</span> },
+    { header: 'Vehicle', cell: (r) => <Link className="link-id mono" to={`/fleet/truck/${r.vehicleId}`}>{r.vehicleId}</Link> },
     { header: 'Breakdown Risk', cell: (r) => <StatusCell state={riskState(r.riskPct)} label={`${r.riskPct}%`} /> },
     { header: 'Brake Wear', cell: (r) => <span className={`mono s-${r.brakePadWearPct >= 80 ? 'attention' : 'flow'}`}>{r.brakePadWearPct}%</span> },
     { header: 'Oil Δ7d', cell: (r) => <span className={`mono s-${r.oilPressureTrend7 <= -3 ? 'attention' : 'flow'}`}>{r.oilPressureTrend7 > 0 ? '+' : ''}{r.oilPressureTrend7}</span> },
@@ -89,7 +91,7 @@ export default function Fleet() {
   // ---- Maintenance schedule (prioritized) ----------------------------------
   const schedRows = maintenanceSchedule.filter((s) => s.priority !== 'Routine').slice(0, 8);
   const schedCols = [
-    { header: 'Vehicle', cell: (r) => <span className="mono muted">{r.vehicleId}</span> },
+    { header: 'Vehicle', cell: (r) => <Link className="link-id mono" to={`/fleet/truck/${r.vehicleId}`}>{r.vehicleId}</Link> },
     { header: 'Priority', cell: (r) => <StatusCell state={r.state} label={r.priority} /> },
     { header: 'Reason', cell: (r) => <span style={{ fontSize: 12 }}>{r.reason}</span> },
     { header: 'Window', cell: (r) => <span className="mono">{r.suggestedWindow}</span> },
@@ -114,7 +116,7 @@ export default function Fleet() {
   const driverRows = [...dp.drivers.slice(0, 3), ...dp.drivers.slice(-3)];
   const driverCols = [
     { header: '#', cell: (r) => <span className="mono muted">{r.rank}</span> },
-    { header: 'Driver', cell: (r) => r.name },
+    { header: 'Driver', cell: (r) => <Link className="link-id" to={`/fleet/driver/${r.driverId}`}>{r.name}</Link> },
     { header: 'Safety', cell: (r) => <span className={`mono s-${r.state}`}>{r.safetyScore}</span> },
     { header: 'km/L', cell: (r) => <span className="mono">{r.fuelEfficiencyKmL}</span> },
     { header: 'Harsh/100km', cell: (r) => <span className={`mono s-${r.worseThanFleet ? 'attention' : 'flow'}`}>{r.harshPer100km}</span> },
@@ -131,6 +133,16 @@ export default function Fleet() {
   return (
     <>
       {header}
+
+      <RoiCard
+        subtitle="Predictive maintenance"
+        items={[
+          { value: '$60–67K/yr', label: 'Fewer breakdowns', note: 'caught ~10 days early — planned service ≈$0.6K vs $3.7K breakdown' },
+          { value: `${maintenanceRisk.highRiskCount}`, label: 'High-risk trucks flagged', state: maintenanceRisk.highRiskCount ? 'attention' : 'flow', note: 'service before failure, not after' },
+          { value: `${m.recall}%`, label: 'Breakdowns caught', note: `${m.model} recall — flags ${m.recall}% of failures in advance` },
+        ]}
+        footnote="High-risk count and model recall are live from this dashboard; the dollar figure is a conservative estimate from real repair-cost data."
+      />
 
       <div className="kpi-grid">
         {data.kpis.map((k) => (
@@ -214,7 +226,7 @@ export default function Fleet() {
                     >
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <span className={`dot s-${a.state}`} />
-                        <span className="mono" style={{ fontWeight: 600, fontSize: 13 }}>{a.vehicleId}</span>
+                        <Link className="link-id mono" to={`/fleet/truck/${a.vehicleId}`} style={{ fontWeight: 600, fontSize: 13 }}>{a.vehicleId}</Link>
                         <span className={`mono s-${a.state}`} style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 600 }}>
                           {a.anomalousDays} unusual days
                         </span>
@@ -266,13 +278,14 @@ export default function Fleet() {
                 </div>
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                   {fuelAnalytics.degradingVehicles.map((id) => (
-                    <span
+                    <Link
                       key={id}
+                      to={`/fleet/truck/${id}`}
                       className="mono s-attention"
-                      style={{ fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: 999, background: 'var(--accent-attention-bg)' }}
+                      style={{ fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: 999, background: 'var(--accent-attention-bg)', textDecoration: 'none' }}
                     >
                       {id}
-                    </span>
+                    </Link>
                   ))}
                 </div>
               </div>
@@ -297,7 +310,7 @@ export default function Fleet() {
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <span className={`dot s-${v.state}`} />
-                    <span className="mono" style={{ fontSize: 12.5, fontWeight: 500 }}>{v.vehicleId}</span>
+                    <Link className="link-id mono" to={`/fleet/truck/${v.vehicleId}`} style={{ fontSize: 12.5, fontWeight: 500 }}>{v.vehicleId}</Link>
                     {v.underused && (
                       <span className="mono s-attention" style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.4px' }}>UNDERUSED</span>
                     )}

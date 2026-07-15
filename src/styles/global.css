@@ -15,6 +15,27 @@ body {
 a { color: inherit; text-decoration: none; }
 button { font-family: var(--font-body); }
 
+/* keyboard focus — one visible ring for every interactive element. Pointer
+   clicks don't trigger it (:focus-visible), so the UI stays clean for mouse
+   users while remaining fully keyboard-navigable. */
+:focus-visible {
+  outline: 2px solid var(--accent-flow);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+a:focus-visible, button:focus-visible, [tabindex]:focus-visible { outline-offset: 3px; }
+
+/* respect the OS "reduce motion" setting — kill the live pulse, hover lifts
+   and every transition for users who ask for less movement. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }
@@ -33,6 +54,13 @@ button { font-family: var(--font-body); }
 
 .mono { font-family: var(--font-mono); }
 .muted { color: var(--text-secondary); }
+
+/* clickable identifier (truck / driver) — opens its detail page */
+.link-id {
+  color: var(--accent-flow); cursor: pointer; text-decoration: none;
+  border-bottom: 1px dashed transparent; transition: border-color 0.12s var(--ease);
+}
+.link-id:hover { border-bottom-color: currentColor; }
 
 /* pill — small tinted rounded badge, reused for deltas / tags across the app */
 .pill {
@@ -170,10 +198,37 @@ button { font-family: var(--font-body); }
   letter-spacing: 1.2px; color: var(--accent-flow);
 }
 .ribbon__divider { width: 0.5px; height: 26px; background: var(--border); }
-.ribbon__metrics { display: flex; align-items: center; gap: 22px; }
+.ribbon__metrics { display: flex; align-items: center; gap: 8px; }
 .ribbon__metric { display: flex; align-items: center; gap: 8px; }
+/* clickable metric — jumps to its module */
+.ribbon__metric--link {
+  border: none; background: transparent; cursor: pointer;
+  padding: 4px 9px; border-radius: 7px; color: inherit;
+  transition: background 0.15s var(--ease);
+}
+.ribbon__metric--link:hover { background: var(--hover); }
 .ribbon__metric-label { font-size: 12px; color: var(--text-secondary); white-space: nowrap; }
 .ribbon__metric-value { font-family: var(--font-mono); font-size: 14px; font-weight: 500; }
+.ribbon__trend { font-family: var(--font-mono); font-size: 10.5px; font-weight: 600; }
+
+/* rotating live operations feed */
+.ribbon__ticker {
+  display: flex; align-items: center; gap: 8px; min-width: 0; max-width: 360px;
+  margin-left: 6px; padding: 5px 12px; cursor: pointer;
+  border: none; background: transparent; color: var(--text-primary);
+  border-left: 0.5px solid var(--border); border-radius: 0;
+  transition: background 0.15s var(--ease);
+}
+.ribbon__ticker:hover { background: var(--hover); }
+.ribbon__ticker .dot { margin-top: 0; }
+.ribbon__ticker-text {
+  font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  animation: ailosTickerIn 0.45s var(--ease);
+}
+@keyframes ailosTickerIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
 .ribbon__spark { display: flex; flex-direction: column; gap: 1px; margin-left: 2px; }
 .ribbon__spark-label { font-size: 9px; color: var(--text-secondary); letter-spacing: 0.6px; }
 .topbar__spacer { flex: 1; }
@@ -277,6 +332,22 @@ button { font-family: var(--font-body); }
 .kpi-card__delta.s-attention { color: var(--accent-attention); background: var(--accent-attention-bg); }
 .kpi-card__delta.s-critical { color: var(--critical); background: var(--critical-bg); }
 
+/* ROI / business-value card ------------------------------------------------*/
+.roi-card { margin-bottom: 18px; }
+.roi-chip {
+  font-family: var(--font-mono); font-size: 10px; font-weight: 500; letter-spacing: 0.6px;
+  color: var(--accent-flow); background: var(--accent-flow-bg); padding: 3px 6px; border-radius: 4px;
+}
+.roi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 16px; }
+.roi-item { border-left: 3px solid var(--border); padding-left: 12px; min-width: 0; }
+.roi-item.s-flow { border-left-color: var(--accent-flow); }
+.roi-item.s-attention { border-left-color: var(--accent-attention); }
+.roi-item.s-critical { border-left-color: var(--critical); }
+.roi-value { font-family: var(--font-display); font-weight: 700; font-size: 26px; line-height: 1.05; letter-spacing: 0.3px; }
+.roi-label { font-size: 12.5px; font-weight: 600; margin-top: 3px; }
+.roi-note { font-size: 11.5px; color: var(--text-secondary); margin-top: 3px; line-height: 1.4; }
+.roi-foot { font-size: 11px; margin-top: 14px; line-height: 1.5; }
+
 /* summary stats ------------------------------------------------------------*/
 .summary-stats { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
 .stat { flex: 1; min-width: 130px; border-radius: 6px; padding: 10px 12px; }
@@ -342,8 +413,15 @@ button { font-family: var(--font-body); }
 /* warehouse heatmap --------------------------------------------------------*/
 .heatmap { display: grid; grid-template-columns: repeat(8, 1fr); gap: 5px; }
 .heat-cell {
-  height: 32px; border-radius: 4px; display: flex; align-items: center; justify-content: center;
-  font-family: var(--font-mono); font-size: 10px;
+  min-height: 48px; border-radius: 6px; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 2px;
+  font-family: var(--font-mono); text-align: center;
+}
+.heat-cell__util { font-family: var(--font-display); font-weight: 600; font-size: 16px; line-height: 1; }
+.heat-cell__items { font-size: 9.5px; opacity: 0.82; line-height: 1; }
+.heat-axis {
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-mono); font-size: 11px; font-weight: 600; color: var(--text-secondary);
 }
 .heat-cell.b1 { background: var(--accent-flow-bg); color: var(--text-secondary); }
 .heat-cell.b2 { background: var(--accent-flow); color: var(--on-accent); }
@@ -442,7 +520,8 @@ button { font-family: var(--font-body); }
 @media (max-width: 1120px) {
   .split, .split--copilot { grid-template-columns: 1fr; }
   .topbar { gap: 14px; padding: 0 16px; }
-  .ribbon__metrics { gap: 16px; }
+  .ribbon__metrics { gap: 6px; }
+  .ribbon__ticker { display: none; }
   .clock { display: none; }
 }
 
@@ -503,7 +582,8 @@ button { font-family: var(--font-body); }
 @media (max-width: 400px) {
   .topbar { gap: 10px; padding: 0 12px; }
   .heatmap { gap: 3px; }
-  .heat-cell { height: 27px; font-size: 9px; }
+  .heat-cell { min-height: 40px; }
+  .heat-cell__util { font-size: 14px; }
   .summary-stats { gap: 8px; }
   .summary-stats .stat { min-width: 100%; }
 }

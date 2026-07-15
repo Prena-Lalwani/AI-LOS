@@ -27,7 +27,20 @@ import {
  *   xFormatter – optional X tick formatter
  *   yDomain    – optional [min, max]
  *   yWidth     – optional Y axis width in px (default 46)
+ *   emphasizeLast – if true, mark the final point of each line series with a
+ *                   filled dot (a "you are here / now" cue for live trends)
  */
+function makeEndDot(color, lastIndex) {
+  // Recharts calls this for every point; draw a dot only at the final index.
+  return function EndDot({ cx, cy, index }) {
+    if (index !== lastIndex || cx == null || cy == null) return <g key={index} />;
+    return (
+      <circle key={index} cx={cx} cy={cy} r={4} fill={color}
+        stroke="var(--bg-panel)" strokeWidth={2} />
+    );
+  };
+}
+
 export default function TrendChart({
   data,
   xKey,
@@ -40,7 +53,9 @@ export default function TrendChart({
   xFormatter,
   yDomain,
   yWidth = 46,
+  emphasizeLast = false,
 }) {
+  const lastIndex = (data?.length || 0) - 1;
   const axis = {
     stroke: 'var(--border)',
     tick: { fill: 'var(--text-secondary)', fontFamily: 'var(--font-mono)', fontSize: 11 },
@@ -86,7 +101,7 @@ export default function TrendChart({
               strokeWidth={s.width || 2.2}
               strokeDasharray={s.dashed ? '4 4' : undefined}
               strokeOpacity={s.opacity || 1}
-              dot={false}
+              dot={emphasizeLast && !s.dashed ? makeEndDot(s.color, lastIndex) : false}
               isAnimationActive={false}
             />
           )

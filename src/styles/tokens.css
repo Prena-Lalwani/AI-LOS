@@ -11,7 +11,7 @@
   --bg-panel: #ffffff;
   --border: #dce1e5;
   --text-primary: #1b242c;
-  --text-secondary: #66727c;
+  --text-secondary: #5b6670; /* darkened from #66727c for AA contrast on small mono labels */
   --accent-flow: #0f8f79; /* teal — normal / live / on-track */
   --accent-attention: #b57518; /* amber — needs attention / alerts */
   --accent-flow-bg: #e3f3ef;

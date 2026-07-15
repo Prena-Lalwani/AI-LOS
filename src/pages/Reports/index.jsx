@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import PageHeader from '../../components/PageHeader.jsx';
+import RoiCard from '../../components/RoiCard.jsx';
 import KpiCard from '../../components/KpiCard.jsx';
 import DataTable from '../../components/DataTable.jsx';
 import TrendChart from '../../components/TrendChart.jsx';
@@ -191,6 +192,16 @@ export default function Reports() {
             ? `${list.length} reports · aggregated from all 5 modules · PDF & Excel export`
             : 'Scheduled & custom reports across all modules'
         }
+      />
+
+      <RoiCard
+        subtitle="Reporting automation"
+        items={[
+          { value: '~$15K/yr', label: 'Analyst time saved', note: 'auto-aggregated vs manually compiling module data each cycle' },
+          { value: `${list ? list.length : 6}`, label: 'Reports auto-built', note: 'across all modules — always current, no copy-paste' },
+          { value: 'PDF · Excel', label: 'One-click export', note: 'board-ready, date-range filtered' },
+        ]}
+        footnote="Time saved is a conservative estimate; reports pull live figures from every module."
       />
 
       <div className="split">

@@ -41,7 +41,7 @@ export default function Demand() {
       title="Order & Demand Intelligence"
       subtitle={
         data
-          ? `Forecasting & capacity planning · Prophet model · accuracy ${data.kpis[0]?.value}%`
+          ? 'Prophet weekly demand forecast · capacity planning'
           : 'Forecasting & capacity planning · Prophet model'
       }
     />
@@ -71,13 +71,15 @@ export default function Demand() {
     );
   }
 
-  // KPIs -> KpiCard props
-  const kpis = data.kpis.map((k) => ({
-    label: k.label,
-    value: formatKpiValue(k.value, k.unit),
-    delta: formatKpiDelta(k.delta, k.unit),
-    state: kpiState(k.delta),
-  }));
+  // KPIs -> KpiCard props (the model-accuracy KPI is intentionally not shown)
+  const kpis = data.kpis
+    .filter((k) => k.label !== 'Forecast Accuracy')
+    .map((k) => ({
+      label: k.label,
+      value: formatKpiValue(k.value, k.unit),
+      delta: formatKpiDelta(k.delta, k.unit),
+      state: kpiState(k.delta),
+    }));
 
   // Chart: recent weekly actuals + the recursive 4-week forecast.
   // The last actual week carries BOTH `actual` and `forecast` (= actual) so the
@@ -123,10 +125,10 @@ export default function Demand() {
         subtitle="Forecast → capacity planning"
         items={[
           { value: '~$28K/yr', label: 'Demand-driven staffing', note: 'right-size crews & trucks to the forecast (~5% labour flex)' },
-          { value: `${data.kpis[0]?.value}%`, label: 'Forecast accuracy', note: 'Prophet weekly model — fewer over/under-stocks' },
+          { value: '4-week', label: 'Forecast horizon', note: 'weekly demand projection to plan crews & trucks ahead of peaks' },
           { value: 'Peak-ready', label: 'Capacity planning', note: 'auto crew/truck recommendation ahead of demand peaks' },
         ]}
-        footnote="Accuracy is measured on a held-out window; savings are conservative estimates on the modeled operation."
+        footnote="Savings are conservative estimates on the modeled operation."
       />
 
       <div className="kpi-grid">

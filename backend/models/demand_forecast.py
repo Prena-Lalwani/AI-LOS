@@ -119,6 +119,17 @@ def build_payload():
     weekly_mape = _mape(test["y"].values, pred)
     accuracy = max(0.0, 100.0 - weekly_mape)
 
+    # HONESTY CHECK — how much does Prophet actually beat naive baselines on the
+    # SAME holdout? Weekly totals are near-flat, so most of the headline accuracy
+    # is just "the level", not forecasting skill. We report the best naive
+    # baseline (mean-of-history vs last-value persistence) and the model's lift.
+    mean_val = float(train["y"].mean())
+    last_val = float(train["y"].iloc[-1])
+    baseline_mape = min(_mape(test["y"].values, [mean_val] * len(test)),
+                        _mape(test["y"].values, [last_val] * len(test)))
+    baseline_accuracy = max(0.0, 100.0 - baseline_mape)
+    skill_pts = accuracy - baseline_accuracy   # accuracy points the model adds
+
     # accuracy trend: prior holdout window (train excluding last 2 windows)
     train_p = ts.iloc[:-2 * WEEKLY_HOLDOUT]
     test_p = ts.iloc[-2 * WEEKLY_HOLDOUT:-WEEKLY_HOLDOUT].reset_index(drop=True)
@@ -225,6 +236,9 @@ def build_payload():
             "method": "recursive (predictions fed back each week)",
             "forecastWeeks": FORECAST_WEEKS,
             "measuredWeeklyMAPE": _round(weekly_mape, 2),
+            "baselineAccuracy": _round(baseline_accuracy, 1),
+            "baselineMAPE": _round(baseline_mape, 2),
+            "skillVsBaselinePts": _round(skill_pts, 1),
             "dayOffset": offset,
             "lastRealDate": last_date.strftime("%Y-%m-%d"),
             "generatedAt": datetime.now().isoformat(timespec="seconds"),

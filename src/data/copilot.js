@@ -14,7 +14,19 @@ export const suggestedPrompts = [
 
 /** Deterministic mock reply — keyword routed. Replace with a real API later. */
 export function aiReply(q) {
-  const s = q.toLowerCase();
+  const s = q.toLowerCase().trim();
+  // greetings / thanks — friendly intro with what the copilot can do
+  if (/^(hi|hii+|hey+|hello+|hiya|yo|sup|salaam|assalam|hola|namaste|good (morning|afternoon|evening))\b/.test(s)
+      || s.includes('thank') || s === 'help' || s.includes('what can you do'))
+    return {
+      text: "Hi! I'm your AI Operations Copilot — I pull answers from all five modules: demand, inventory, dispatch, fleet and executive. Here's what I can help with:",
+      bullets: [
+        'On-time delivery — what dipped and why',
+        'Routes over fuel budget & suggested fuel stops',
+        'What to reorder this week & overstock to release',
+        'Fleet maintenance risk — which trucks to service first',
+      ],
+    };
   if (s.includes('on-time') || s.includes('on time') || s.includes('late') || s.includes('delivery'))
     return {
       text: 'On-time delivery dipped to 88.4% in the Midwest yesterday, 5.8 points below target. Root cause analysis:',
@@ -52,7 +64,12 @@ export function aiReply(q) {
       ],
     };
   return {
-    text: `Analyzing "${q}" across all modules. The network is currently flowing within target at 94.2% on-time. I can break this down by module, route, or facility — let me know which view you need.`,
-    bullets: [],
+    text: `Good question. I work across demand, inventory, dispatch, fleet and executive operations — try asking me something like:`,
+    bullets: [
+      'Why did on-time delivery drop, and where?',
+      'Which routes are over fuel budget this week?',
+      'What should I reorder to avoid a stock-out?',
+      'Which trucks are at highest maintenance risk?',
+    ],
   };
 }

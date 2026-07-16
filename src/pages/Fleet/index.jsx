@@ -139,9 +139,9 @@ export default function Fleet() {
         items={[
           { value: '$60–67K/yr', label: 'Fewer breakdowns', note: 'caught ~10 days early — planned service ≈$0.6K vs $3.7K breakdown' },
           { value: `${maintenanceRisk.highRiskCount}`, label: 'High-risk trucks flagged', state: maintenanceRisk.highRiskCount ? 'attention' : 'flow', note: 'service before failure, not after' },
-          { value: `${m.recall}%`, label: 'Breakdowns caught', note: `${m.model} recall — flags ${m.recall}% of failures in advance` },
+          { value: `${m.labelHorizonDays}-day`, label: 'Early warning', note: 'flags at-risk trucks before they fail — service on plan, not after a breakdown' },
         ]}
-        footnote="High-risk count and model recall are live from this dashboard; the dollar figure is a conservative estimate from real repair-cost data."
+        footnote="High-risk count is live from this dashboard; the dollar figure is a conservative estimate from real repair-cost data."
       />
 
       <div className="kpi-grid">

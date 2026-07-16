@@ -32,7 +32,7 @@ from datetime import datetime
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, fbeta_score
 from ortools.constraint_solver import pywrapcp, routing_enums_pb2
 
 # --------------------------------------------------------------------------- #
@@ -231,8 +231,21 @@ def _label_stockout(inv):
 def _stockout_model(inv, name_map, primary_map):
     df = _label_stockout(inv)
 
+    # engineered predictors (the classic stock-out signals, per product-location):
+    #   units_sold_roll7 — recent demand rate
+    #   inv_trend7       — 7-day depletion (how fast stock is falling)
+    #   days_of_cover    — inventory ÷ recent daily demand (days until empty)
+    df = df.sort_values(["product_id", "location_code", "date"])
+    g = df.groupby(["product_id", "location_code"], sort=False)
+    df["units_sold_roll7"] = g["units_sold"].transform(lambda s: s.rolling(7, min_periods=1).mean())
+    df["inv_trend7"] = g["inventory_level"].transform(lambda s: s - s.shift(7)).fillna(0.0)
+    doc = df["inventory_level"] / df["units_sold_roll7"].replace(0, np.nan)
+    df["days_of_cover"] = doc.replace([np.inf, -np.inf], 999).fillna(999).clip(upper=999)
+
     # features: numeric + category one-hot + warehouse one-hot
-    feats = df[["inventory_level", "units_sold", "units_received"]].copy()
+    num_cols = ["inventory_level", "units_sold", "units_received",
+                "units_sold_roll7", "inv_trend7", "days_of_cover"]
+    feats = df[num_cols].copy()
     feats = pd.concat([
         feats,
         pd.get_dummies(df["category"], prefix="cat"),
@@ -255,16 +268,17 @@ def _stockout_model(inv, name_map, primary_map):
     )
     clf.fit(X_train, y_train)
 
-    # Choose the decision threshold that maximizes F1 on the TRAINING data only
-    # (no test leakage) — standard practice for an imbalanced target, and far
-    # more informative than the default 0.5 when positives are ~3% of rows.
+    # Choose the decision threshold on the TRAINING data only (no test leakage),
+    # tuned for RECALL via F-beta (β=2). A missed stock-out (empty shelf, lost
+    # sale) costs far more than a false alarm, so we deliberately weight recall
+    # above precision rather than balancing them with F1.
     proba_train = clf.predict_proba(X_train)[:, 1]
     thresh = 0.5
-    best_f1 = -1.0
+    best_fb = -1.0
     for t in np.linspace(0.05, 0.9, 50):
-        f = f1_score(y_train, (proba_train >= t).astype(int), zero_division=0)
-        if f > best_f1:
-            best_f1, thresh = f, float(t)
+        f = fbeta_score(y_train, (proba_train >= t).astype(int), beta=2, zero_division=0)
+        if f > best_fb:
+            best_fb, thresh = f, float(t)
 
     pred = (clf.predict_proba(X_test)[:, 1] >= thresh).astype(int)
 
@@ -283,7 +297,7 @@ def _stockout_model(inv, name_map, primary_map):
 
     # score the latest snapshot per product-location for a live at-risk list
     latest = df.sort_values("date").groupby(["product_id", "location_code"]).tail(1).copy()
-    latest_feats = latest[["inventory_level", "units_sold", "units_received"]].copy()
+    latest_feats = latest[num_cols].copy()
     latest_feats = pd.concat([
         latest_feats,
         pd.get_dummies(latest["category"], prefix="cat"),

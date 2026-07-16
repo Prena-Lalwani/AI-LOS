@@ -11,6 +11,7 @@ let cachedChat = null;
 export default function Copilot() {
   const [messages, setMessages] = useState(cachedChat || initialMessages);
   const [input, setInput] = useState('');
+  const [typing, setTyping] = useState(false);
   const logRef = useRef(null);
 
   // mirror the conversation into the cache so it survives route navigation
@@ -18,17 +19,22 @@ export default function Copilot() {
 
   useEffect(() => {
     if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
-  }, [messages]);
+  }, [messages, typing]);
 
   const send = (text) => {
+    if (typing) return;                                   // ignore while AI is "thinking"
     const q = (typeof text === 'string' ? text : input).trim();
     if (!q) return;
     setMessages((m) => [...m, { role: 'user', text: q }]);
     setInput('');
+    setTyping(true);
+    const r = aiReply(q);
+    // realistic pause — longer for longer answers (as if the AI is composing)
+    const delay = 800 + (r.bullets?.length ? 700 : 0) + Math.min(900, r.text.length * 12);
     setTimeout(() => {
-      const r = aiReply(q);
       setMessages((m) => [...m, { role: 'ai', text: r.text, bullets: r.bullets }]);
-    }, 550);
+      setTyping(false);
+    }, delay);
   };
 
   return (
@@ -64,6 +70,14 @@ export default function Copilot() {
                   </div>
                 </div>
               ))}
+              {typing && (
+                <div className="chat__row ai">
+                  <div className="chat__avatar">AI</div>
+                  <div className="bubble ai" aria-label="Copilot is typing">
+                    <span className="typing-dots"><span /><span /><span /></span>
+                  </div>
+                </div>
+              )}
             </div>
             <div className="chat__input-row">
               <input
@@ -71,9 +85,10 @@ export default function Copilot() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); send(); } }}
-                placeholder="Ask about operations, routes, inventory, or fleet…"
+                placeholder={typing ? 'Copilot is thinking…' : 'Ask about operations, routes, inventory, or fleet…'}
+                disabled={typing}
               />
-              <button className="chat__send" onClick={() => send()} aria-label="Send">
+              <button className="chat__send" onClick={() => send()} aria-label="Send" disabled={typing}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M4 12l16-8-6 16-2.5-6.5z" />
                 </svg>

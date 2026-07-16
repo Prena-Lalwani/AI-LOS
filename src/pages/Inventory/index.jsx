@@ -62,6 +62,9 @@ export default function Inventory() {
   const [pickSel, setPickSel] = useState([]);
   const [customRoute, setCustomRoute] = useState(null);
   const [pickBusy, setPickBusy] = useState(false);
+  // slotting moves the user has confirmed (applied) — the heatmap only changes
+  // once a suggestion is applied. Each entry = { cabinet, assign } labels.
+  const [appliedMoves, setAppliedMoves] = useState([]);
 
   useEffect(() => {
     let alive = true;
@@ -77,7 +80,7 @@ export default function Inventory() {
       title="Inventory & Warehouse Intelligence"
       subtitle={
         data
-          ? `${data.kpis[0]?.value} SKUs · 3 facilities · stock-out model ${data.stockOutPredictions.modelMetrics.accuracy}% acc · live`
+          ? `${data.kpis[0]?.value} SKUs · 3 facilities · reorder · stock-out ML · picking · live`
           : 'Reorder · stock-out ML · heatmap · route optimization'
       }
     />
@@ -115,6 +118,39 @@ export default function Inventory() {
   const wh = pickWh || warehouseHeatmap.primary;         // selected warehouse id
   const heatWarehouse = warehouseHeatmap.warehouses.find((w) => w.warehouseId === wh)
     || warehouseHeatmap.warehouses[0];
+
+  const priorityOf = (u) => (u > 90 ? 'Congested' : u > 75 ? 'Busy' : u > 55 ? 'Normal' : 'Idle');
+
+  // ---- slotting algorithm ---------------------------------------------------
+  // 1) each cabinet gets a priority by nearness to the dock (A1 corner) — P1 is
+  //    the closest. distance uses the same grid weights as the picking model.
+  // 2) allocate the highest-demand aisles (by pick activity) to the highest-
+  //    priority (nearest) cabinets. All derived — no manual placement.
+  const dockDist = (z, a) => z * 10 + a * 4;
+  const cabinets = heatWarehouse.cells.map((c) => ({
+    ...c, label: `${String.fromCharCode(64 + c.zone)}${c.aisle}`, dist: dockDist(c.zone, c.aisle),
+  }));
+  const byDist = [...cabinets].sort((a, b) => a.dist - b.dist);            // nearest → farthest
+  const priorityByLabel = {};
+  byDist.forEach((c, i) => { priorityByLabel[c.label] = i + 1; });         // P1 = nearest the door
+  const byDemand = [...cabinets].sort((a, b) => b.pickCount - a.pickCount); // busiest first
+  // Suggest only moves that bring high-demand stock CLOSER to the door: for each
+  // aisle (busiest first) its ideal cabinet is the equally-ranked nearest one;
+  // propose a move only when the aisle currently sits FARTHER than that ideal.
+  const slotPlan = byDemand
+    .map((aisle, i) => ({ aisle, target: byDist[i], rank: i }))
+    .filter((m) => m.target && m.aisle.label !== m.target.label
+      && priorityByLabel[m.aisle.label] > m.rank + 1);
+  // effective content per cabinet — identity at first, and swaps ONLY when the
+  // user confirms (applies) a suggested move below. So the heatmap changes on
+  // confirm, not automatically.
+  const cabinetByLabel = Object.fromEntries(cabinets.map((c) => [c.label, c]));
+  const contentMap = {};
+  cabinets.forEach((c) => { contentMap[c.label] = c.label; });
+  appliedMoves.forEach(({ from, to }) => {
+    const t = contentMap[from]; contentMap[from] = contentMap[to]; contentMap[to] = t;
+  });
+
   const whProducts = catalog.products.filter((p) => p.warehouseId === wh);
   // route to show: fetched result, or the startup example if it's the same wh
   const route = customRoute
@@ -138,7 +174,7 @@ export default function Inventory() {
       .catch(() => {})
       .finally(() => setPickBusy(false));
   };
-  const changeWh = (whId) => { setPickWh(whId); setPickSel([]); setCustomRoute(null); loadRoute(whId, []); };
+  const changeWh = (whId) => { setPickWh(whId); setPickSel([]); setCustomRoute(null); setAppliedMoves([]); loadRoute(whId, []); };
   const togglePick = (pid) => setPickSel((s) => (
     s.includes(pid) ? s.filter((x) => x !== pid) : [...s, pid]));
   const optimizeRoute = () => loadRoute(wh, pickSel);
@@ -166,7 +202,7 @@ export default function Inventory() {
         items={[
           { value: `$${Math.round(data.overstock.totalExcessValue / 1000)}K`, label: 'Overstock capital', state: 'attention', note: `${data.overstock.count} SKUs to right-size · ~$${Math.round(data.overstock.totalExcessValue * 0.25 / 1000)}K/yr carrying cost saved` },
           { value: `−${data.pickingRouteExample.timeSavedPct}%`, label: 'Pick-tour time', note: 'OR-Tools route vs naive picklist → ~$50K/yr picker labour' },
-          { value: '$70–100K/yr', label: 'Stock-out recovery', note: `${data.stockOutPredictions.atRiskCount} SKUs flagged ${data.meta.leadTimeDays} days early` },
+          { value: '$70–100K/yr', label: 'Stock-out recovery', note: `${data.stockOutPredictions.atRiskCount} at-risk SKUs flagged ${data.meta.leadTimeDays} days early — reorder before the shelf empties` },
         ]}
         footnote="Overstock value and pick-time saving are computed live from this dashboard; carrying cost @ 25%/yr and stock-out recovery are conservative estimates."
       />
@@ -189,12 +225,12 @@ export default function Inventory() {
               </select>
             </div>
             <p className="muted" style={{ margin: '0 0 12px', fontSize: 12, lineHeight: 1.5 }}>
-              {heatWarehouse.zones} zones (rows A–{String.fromCharCode(64 + heatWarehouse.zones)}) × {heatWarehouse.aisles} aisles.
-              Each cell shows how busy that aisle is (occupancy + picks) and how many catalogued items sit there.
-              Items ticked in the picking panel below get a teal ring.
+              Real layout — rows A–{String.fromCharCode(64 + heatWarehouse.zones)} zones, columns 1–{heatWarehouse.aisles} aisles.
+              Each cabinet has a priority <strong>P1</strong> (at the A1 dock) → <strong>P{cabinets.length}</strong> (farthest).
+              The algorithm <strong>suggests</strong> moving high-demand stock to the nearest cabinets — <strong>apply</strong> a suggestion below and
+              this map updates. Colour = current busyness; ticked pick items get a teal ring.
             </p>
             {(() => {
-              const cellByZA = Object.fromEntries(heatWarehouse.cells.map((c) => [`${c.zone}-${c.aisle}`, c]));
               const zoneNums = Array.from({ length: heatWarehouse.zones }, (_, i) => i + 1);
               const aisleNums = Array.from({ length: heatWarehouse.aisles }, (_, i) => i + 1);
               return (
@@ -205,19 +241,25 @@ export default function Inventory() {
                     <Fragment key={`row${z}`}>
                       <div className="heat-axis">{String.fromCharCode(64 + z)}</div>
                       {aisleNums.map((a) => {
-                        const cellKey = `${z}-${a}`;
-                        const c = cellByZA[cellKey];
-                        const util = c ? c.utilization : 0;
-                        const items = cellProducts[cellKey] || [];
-                        const picked = pickedCells.has(cellKey);
+                        const posLabel = `${String.fromCharCode(64 + z)}${a}`;
+                        const pri = priorityByLabel[posLabel];
+                        const srcLabel = contentMap[posLabel];             // stock currently shown here
+                        const cell = cabinetByLabel[srcLabel];
+                        const util = cell ? cell.utilization : 0;
+                        const realKey = cell ? `${cell.zone}-${cell.aisle}` : `${z}-${a}`;
+                        const items = cellProducts[realKey] || [];
+                        const picked = pickedCells.has(realKey);
+                        const moved = srcLabel !== posLabel;
                         return (
                           <div
-                            key={cellKey}
+                            key={posLabel}
                             className={`heat-cell ${heatBucket(util)}`}
                             style={{ boxShadow: picked ? 'inset 0 0 0 2px var(--accent-flow)' : undefined }}
-                            title={`${String.fromCharCode(64 + z)}${a} · Zone ${z} Aisle ${a} — utilization ${util}%, ${c ? c.pickCount : 0} picks`
+                            title={`${posLabel} · P${pri} (nearest = P1) — ${priorityOf(util)}, utilization ${util}%, ${cell ? cell.pickCount : 0} picks`
+                              + (moved ? `\nHolds ${srcLabel}'s stock (re-slotted)` : '')
                               + (items.length ? `\nItems: ${items.join(', ')}` : '\nNo catalogued items')}
                           >
+                            <span className="heat-cell__pri">P{pri}</span>
                             <span className="heat-cell__util">{util}%</span>
                             <span className="heat-cell__items">{items.length ? `${items.length} item${items.length > 1 ? 's' : ''}` : 'no items'}</span>
                           </div>
@@ -235,6 +277,48 @@ export default function Inventory() {
               <span className="legend__item"><span className="legend__swatch" style={{ background: 'var(--accent-attention)' }} />Congested &gt;90%</span>
               <span className="legend__item"><span className="legend__swatch" style={{ background: 'transparent', boxShadow: 'inset 0 0 0 2px var(--accent-flow)' }} />Pick item</span>
             </div>
+            {slotPlan.length > 0 ? (
+              <div style={{ marginTop: 12 }}>
+                <div className="card__head" style={{ marginBottom: 8, gap: 8 }}>
+                  <span className="ai-chip">SLOTTING</span>
+                  <span style={{ fontWeight: 600, fontSize: 12.5 }}>Suggested moves — review &amp; apply to re-slot</span>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                  {slotPlan.slice(0, 4).map((m) => {
+                    const from = m.aisle.label;
+                    const to = m.target.label;
+                    const isApplied = appliedMoves.some((x) => x.from === from && x.to === to);
+                    return (
+                      <div key={from} style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                        <span className="muted">Move</span>
+                        <span className="mono s-attention" style={{ fontWeight: 600 }}>{from}</span>
+                        <span className="muted">({m.aisle.pickCount} picks · now P{priorityByLabel[from]})</span>
+                        <span className="muted">→</span>
+                        <span className="mono s-flow" style={{ fontWeight: 600 }}>P{m.rank + 1} · {to}</span>
+                        <span className="muted">(nearer the door)</span>
+                        <button
+                          className="btn btn--sm"
+                          style={{ marginLeft: 'auto', ...(isApplied ? { color: 'var(--accent-flow)', borderColor: 'var(--accent-flow)' } : {}) }}
+                          onClick={() => setAppliedMoves((prev) => (isApplied
+                            ? prev.filter((x) => !(x.from === from && x.to === to))
+                            : [...prev, { from, to }]))}
+                        >
+                          {isApplied ? '✓ Applied · Undo' : 'Apply'}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="muted" style={{ fontSize: 11, marginTop: 8, lineHeight: 1.5 }}>
+                  Algorithm ranks cabinets P1 (nearest dock) → P{cabinets.length} (farthest); only aisles whose busy stock currently sits farther than it should are suggested for a move closer.
+                  {appliedMoves.length > 0 && <span className="s-flow"> {appliedMoves.length} move{appliedMoves.length > 1 ? 's' : ''} applied — the map above is updated.</span>}
+                </div>
+              </div>
+            ) : (
+              <div style={{ marginTop: 12, fontSize: 12.5, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span className="dot s-flow" /> High-demand stock is already in the nearest cabinets — slotting is optimal.
+              </div>
+            )}
           </div>
 
           <div className="card">
@@ -307,6 +391,9 @@ export default function Inventory() {
               <h2>Stock-Out Prediction</h2>
               <span className="muted" style={{ fontSize: 12 }}>{stockOutPredictions.atRiskCount} at risk · next 7 days</span>
             </div>
+            <p className="muted" style={{ margin: '0 0 10px', fontSize: 11, lineHeight: 1.5 }}>
+              Products likely to run out within {data.meta.leadTimeDays} days, ranked by risk — an early-warning list so you can reorder before the shelf empties.
+            </p>
             {stockOutPredictions.atRisk.length === 0 ? (
               <AllClear>No locations above the model&rsquo;s risk threshold.</AllClear>
             ) : (

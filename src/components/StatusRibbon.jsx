@@ -27,7 +27,6 @@ export default function StatusRibbon() {
     ]).then(([fleet, dispatch, demand]) => {
       if (!alive) return;
       const inService = fleet.kpis.find((k) => k.label === 'Units In Service');
-      const forecast = demand.kpis.find((k) => k.label === 'Forecast Accuracy');
       const avgWeek = demand.kpis.find((k) => k.label === 'Avg Weekly Demand');
       const alerts = (fleet.maintenanceRisk?.highRiskCount || 0)
         + (fleet.anomalies?.summary?.vehiclesFlagged || 0)
@@ -66,13 +65,13 @@ export default function StatusRibbon() {
         const up = avgWeek.delta > 0;
         feed.push({
           to: '/demand', state: 'flow',
-          text: `Demand ${up ? '▲' : '▼'} ${Math.abs(avgWeek.delta)}% WoW · ${Number(avgWeek.value).toLocaleString()} units/wk · forecast ${forecast?.value ?? '—'}% accurate`,
+          text: `Demand ${up ? '▲' : '▼'} ${Math.abs(avgWeek.delta)}% WoW · ${Number(avgWeek.value).toLocaleString()} units/wk`,
         });
       }
 
       setM({
-        forecastAcc: forecast ? forecast.value : null,
-        forecastDelta: forecast ? forecast.delta : null,
+        weeklyDemand: avgWeek ? avgWeek.value : null,
+        weeklyDelta: avgWeek ? avgWeek.delta : null,
         activeTrucks: inService ? parseInt(inService.value, 10) : null,
         totalTrucks: fleet.vehicleUtilization?.vehicles?.length ?? null,
         alerts,
@@ -118,11 +117,11 @@ export default function StatusRibbon() {
       <div className="ribbon__divider" />
       <div className="ribbon__metrics">
         <button type="button" className="ribbon__metric ribbon__metric--link" onClick={() => navigate('/demand')} title="Open Demand Intelligence">
-          <span className="ribbon__metric-label">Forecast</span>
-          <span className="ribbon__metric-value s-flow">{m?.forecastAcc != null ? `${m.forecastAcc}%` : dash}</span>
-          {m?.forecastDelta != null && m.forecastDelta !== 0 && (
-            <span className={`ribbon__trend ${m.forecastDelta > 0 ? 's-flow' : 's-attention'}`}>
-              {m.forecastDelta > 0 ? '▲' : '▼'}{Math.abs(m.forecastDelta)}
+          <span className="ribbon__metric-label">Weekly Demand</span>
+          <span className="ribbon__metric-value">{m?.weeklyDemand != null ? Number(m.weeklyDemand).toLocaleString() : dash}</span>
+          {m?.weeklyDelta != null && m.weeklyDelta !== 0 && (
+            <span className={`ribbon__trend ${m.weeklyDelta > 0 ? 's-flow' : 's-attention'}`}>
+              {m.weeklyDelta > 0 ? '▲' : '▼'}{Math.abs(m.weeklyDelta)}%
             </span>
           )}
         </button>
